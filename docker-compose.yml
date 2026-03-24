@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  coordinator:
+    build: 
+      context: ./coordinator
+    ports:
+      - "8000:8000"
+    environment:
+      # The coordinator needs to know how to reach the nodes
+      - NODE_URLS=http://node1:8000,http://node2:8000,http://node3:8000
+    volumes:
+      - ./coordinator:/app
+
+  node1:
+    build:
+      context: ./node
+    ports:
+      - "8001:8000"
+    environment:
+      - NODE_ID=node1
+    volumes:
+      - ./node:/app
+
+  node2:
+    build:
+      context: ./node
+    ports:
+      - "8002:8000"
+    environment:
+      - NODE_ID=node2
+    volumes:
+      - ./node:/app
+
+  node3:
+    build:
+      context: ./node
+    ports:
+      - "8003:8000"
+    environment:
+      - NODE_ID=node3
+    volumes:
+      - ./node:/app
