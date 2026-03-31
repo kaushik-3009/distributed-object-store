@@ -1,0 +1,7 @@
+def shopSmart(orderList, fruitShops):
+    """
+    orderList: List of (fruit, numPounds) tuples
+    fruitShops: List of FruitShop objects
+    Returns the shop with the lowest cost for the order
+    """
+    bestShop = No

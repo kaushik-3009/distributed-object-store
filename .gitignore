@@ -1,18 +1,10 @@
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
+.DS_Store
+Project_Specifications.md
 
-*.db
-*.db-journal
+**/*.md
+!README.md
 
-node/data/
 
-.terraform/
-*.tfstate
-*.tfstate.backup
-.terraform.lock.hcl
-
-.env
+docs/
+docs/logs/
+docs/notes/
