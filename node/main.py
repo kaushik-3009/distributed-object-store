@@ -5,7 +5,6 @@ import shutil
 
 app = FastAPI(title="Storage Node Service")
 
-# Use an environment variable or default to /app/data
 DATA_DIR = os.getenv("DATA_DIR", "/app/data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -16,7 +15,6 @@ def health_check():
 
 @app.post("/upload/{file_id}")
 async def upload_chunk(file_id: str, file: UploadFile = File(...)):
-    # Simple: save the file using the file_id as the name
     file_path = os.path.join(DATA_DIR, file_id)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -36,3 +34,18 @@ async def delete_chunk(file_id: str):
         os.remove(file_path)
         return {"message": f"Deleted {file_id}"}
     raise HTTPException(status_code=404, detail="File not found")
+
+@app.post("/corrupt/{file_id}")
+async def corrupt_chunk(file_id: str):
+    """
+    ADMIN ENDPOINT: Intentionally ruins a file to test the Integrity Layer.
+    Appends the word "CORRUPTED" to the middle of the binary file.
+    """
+    file_path = os.path.join(DATA_DIR, file_id)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    with open(file_path, "a") as f:
+        f.write("HACKER_CORRUPTION")
+        
+    return {"message": f"File {file_id} has been intentionally corrupted."}
