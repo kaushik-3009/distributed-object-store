@@ -153,10 +153,7 @@ sec-dist-proj/
 ├── test_suite.py               # Integration tests (healthy, single-corruption, double-corruption)
 ├── terraform/main.tf           # AWS infra (VPC, EC2, ECR, SG)
 ├── docker-compose.yml          # Local orchestration
-├── docs/
-│   ├── logs/                   # Session-by-session development logs
-│   └── notes/                  # Architecture and concept notes
-└── Project_Specifications.md   # Full project spec and phase plan
+
 ```
 
 ## API Reference
