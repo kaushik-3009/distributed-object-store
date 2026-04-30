@@ -6,9 +6,11 @@ services:
     ports:
     - 8000:8000
     environment:
-    - NODE_URLS=http://node1:8000,http://node2:8000,http://node3:8000
+    - NODE_URLS=http://node1:8000,http://node2:8000,http://node3:8000,http://node4:8000,http://node5:8000,http://node6:8000
     volumes:
     - ./coordinator:/app
+    mem_limit: 256m
+    memswap_limit: 256m
   node1:
     build:
       context: ./node
@@ -19,6 +21,8 @@ services:
     - NODE_ZONE=us-east-1a
     volumes:
     - ./node:/app
+    mem_limit: 150m
+    memswap_limit: 150m
   node2:
     build:
       context: ./node
@@ -29,6 +33,8 @@ services:
     - NODE_ZONE=us-east-1b
     volumes:
     - ./node:/app
+    mem_limit: 150m
+    memswap_limit: 150m
   node3:
     build:
       context: ./node
@@ -39,3 +45,41 @@ services:
     - NODE_ZONE=us-east-1c
     volumes:
     - ./node:/app
+    mem_limit: 150m
+    memswap_limit: 150m
+  node4:
+    build:
+      context: ./node
+    ports:
+    - 8004:8000
+    environment:
+    - NODE_ID=node4
+    - NODE_ZONE=us-east-1a
+    volumes:
+    - ./node:/app
+    mem_limit: 150m
+    memswap_limit: 150m
+  node5:
+    build:
+      context: ./node
+    ports:
+    - 8005:8000
+    environment:
+    - NODE_ID=node5
+    - NODE_ZONE=us-east-1b
+    volumes:
+    - ./node:/app
+    mem_limit: 150m
+    memswap_limit: 150m
+  node6:
+    build:
+      context: ./node
+    ports:
+    - 8006:8000
+    environment:
+    - NODE_ID=node6
+    - NODE_ZONE=us-east-1c
+    volumes:
+    - ./node:/app
+    mem_limit: 150m
+    memswap_limit: 150m

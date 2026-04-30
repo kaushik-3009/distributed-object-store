@@ -6,9 +6,10 @@ import sqlite3
 import hashlib
 import random
 import asyncio
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
@@ -19,6 +20,15 @@ from erasure_coding import ReedSolomon
 # --- CONFIG & GLOBALS ---
 DB_FILE = "/app/coordinator.db"
 http_client: httpx.AsyncClient = None
+ws_connections: list[WebSocket] = []
+
+def broadcast(msg: str):
+    """Send a message to all connected WebSocket clients."""
+    for ws in ws_connections[:]:
+        try:
+            asyncio.create_task(ws.send_text(msg))
+        except Exception:
+            ws_connections.remove(ws)
 
 RAW_NODE_URLS = os.getenv(
     "NODE_URLS",
@@ -115,6 +125,9 @@ async def core_upload(filename: str, file_bytes: bytes, k: int, n: int):
         files = {'file': (chunk_id, fragment)}
         await http_client.post(f"{node_url}/upload/{chunk_id}", files=files, timeout=10.0)
         manifest[str(i)] = {"node": node_url, "hash": hashes[i]}
+
+    # Broadcast upload event to WebSocket terminal
+    broadcast(f"\n[UPLOAD] {filename} // {n} fragments // k={k} // zone dist: {', '.join(selected_nodes)}\n")
 
     # 4. Persistence
     cursor.execute('''
@@ -219,6 +232,7 @@ async def download_file(filename: str, background_tasks: BackgroundTasks):
     
     if missing:
         async def heal_worker():
+            broadcast(f"\n[REPAIR] Healing {filename} // missing chunks: {missing}\n")
             frags, _ = rs.encode(data, k, n)
             active_nodes = [u for u, i in CLUSTER_TOPOLOGY.items() if i["active"]]
             for i in missing:
@@ -232,6 +246,7 @@ async def download_file(filename: str, background_tasks: BackgroundTasks):
             conn = sqlite3.connect(DB_FILE)
             conn.execute('UPDATE files SET manifest = ? WHERE filename = ?', (json.dumps(manifest), filename))
             conn.commit(); conn.close()
+            broadcast(f"[REPAIR] {filename} healed successfully.\n")
         background_tasks.add_task(heal_worker)
 
     return StreamingResponse(io.BytesIO(data), media_type="application/octet-stream", headers={"Content-Disposition": f"attachment; filename={os.path.basename(filename)}"})
@@ -253,10 +268,39 @@ async def delete_file(filename: str):
             except Exception: pass
     conn.execute('DELETE FROM files WHERE filename = ?', (filename,))
     conn.commit(); conn.close()
+    broadcast(f"\n[DELETE] {filename} purged from vault.\n")
     return {"message": "Deleted"}
 
+@app.get("/admin/file/{filename}/manifest")
+async def get_file_manifest(filename: str):
+    conn = sqlite3.connect(DB_FILE)
+    row = conn.execute('SELECT file_id, version_id, k, n, manifest FROM files WHERE filename = ?', (filename,)).fetchone()
+    conn.close()
+    if not row: raise HTTPException(status_code=404, detail="File not found")
+    fid, vid, k, n, m_str = row
+    manifest = json.loads(m_str)
+    return {
+        "filename": filename,
+        "file_id": fid,
+        "version_id": vid,
+        "k": k,
+        "n": n,
+        "manifest": manifest
+    }
+
 @app.get("/admin/topology")
-async def get_topology(): return CLUSTER_TOPOLOGY
+async def get_topology():
+    enriched = {}
+    for url, info in CLUSTER_TOPOLOGY.items():
+        enriched[url] = info.copy()
+        if info["active"]:
+            try:
+                resp = await http_client.get(f"{url}/metrics", timeout=2.0)
+                if resp.status_code == 200:
+                    enriched[url]["metrics"] = resp.json()
+            except Exception:
+                pass
+    return enriched
 
 class TopologyToggleRequest(BaseModel):
     node_url: str
@@ -265,6 +309,9 @@ class TopologyToggleRequest(BaseModel):
 async def toggle_node(req: TopologyToggleRequest):
     if req.node_url in CLUSTER_TOPOLOGY:
         CLUSTER_TOPOLOGY[req.node_url]["active"] = not CLUSTER_TOPOLOGY[req.node_url]["active"]
+        new_state = CLUSTER_TOPOLOGY[req.node_url]["active"]
+        status = "ONLINE" if new_state else "OFFLINE"
+        broadcast(f"\n[TOPOLOGY] {req.node_url} -> {status}\n")
         return {"active": CLUSTER_TOPOLOGY[req.node_url]["active"]}
     raise HTTPException(status_code=404)
 
@@ -282,3 +329,16 @@ async def corrupt_file(node_id: int, filename: str):
             await http_client.post(f"{url}/corrupt/{fid}_{vid}_{idx}")
             return {"message": "Corrupted"}
     raise HTTPException(status_code=404, detail="No chunk on this node")
+
+@app.websocket("/ws/stream")
+async def websocket_stream(ws: WebSocket):
+    await ws.accept()
+    ws_connections.append(ws)
+    ts = time.strftime("%H:%M:%S")
+    await ws.send_text(f"\n[SYSTEM] SecStore Matrix Terminal // CONNECTED {ts}\n")
+    await ws.send_text("[*] Waiting for cluster events...\n")
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        ws_connections.remove(ws)

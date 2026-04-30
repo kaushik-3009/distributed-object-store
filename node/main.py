@@ -14,6 +14,27 @@ def health_check():
     zone = os.getenv("NODE_ZONE", "default-zone")
     return {"status": "ok", "service": f"storage-node-{node_id}", "zone": zone}
 
+@app.get("/metrics")
+def get_metrics():
+    node_id = os.getenv("NODE_ID", "unknown_node")
+    rss, vms = 0, 0
+    try:
+        with open("/proc/self/status", "r") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    rss = int(line.split()[1]) * 1024
+                elif line.startswith("VmSize:"):
+                    vms = int(line.split()[1]) * 1024
+    except Exception:
+        pass
+    return {
+        "node_id": node_id,
+        "rss_bytes": rss,
+        "rss_mb": rss / (1024 * 1024),
+        "vms_bytes": vms,
+        "vms_mb": vms / (1024 * 1024),
+    }
+
 @app.post("/upload/{file_id}")
 async def upload_chunk(file_id: str, file: UploadFile = File(...)):
     file_path = os.path.join(DATA_DIR, file_id)

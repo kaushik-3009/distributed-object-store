@@ -1,368 +1,609 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecStore Distributed Vault</title>
-    <style>
-        :root {
-            --black: #000000;
-            --white: #FFFFFF;
-            --green: #00FF00;
-            --gray-warm: #9D968E;
-            --gray-med: #666666;
-            --near-black: #1A1A1A;
-            --font-mono: "Courier New", Courier, monospace;
-            --font-sans: Arial, Helvetica, sans-serif;
-        }
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SecStore Distributed Vault</title>
+        <style>
+            :root {
+                --black: #000000;
+                --white: #ffffff;
+                --green: #00ff00;
+                --gray-warm: #9d968e;
+                --gray-med: #666666;
+                --near-black: #1a1a1a;
+                --font-mono: "Courier New", Courier, monospace;
+                --font-sans: Arial, Helvetica, sans-serif;
+            }
 
-        body {
-            background-color: var(--white);
-            color: var(--black);
-            font-family: var(--font-mono);
-            font-size: 13px;
-            line-height: 19.5px;
-            margin: 0;
-            padding: 0;
-        }
+            body {
+                background-color: var(--white);
+                color: var(--black);
+                font-family: var(--font-mono);
+                font-size: 13px;
+                line-height: 19.5px;
+                margin: 0;
+                padding: 0;
+            }
 
-        h1 { font-size: 24px; font-weight: 700; line-height: 36px; margin-top: 0; margin-bottom: 12px; }
-        h2 { font-size: 14.4px; font-weight: 700; line-height: 21.6px; margin-top: 0; margin-bottom: 16px; text-transform: uppercase; border-bottom: 1px solid var(--black); padding-bottom: 8px;}
-        h3 { font-size: 12px; font-weight: 700; line-height: 18px; margin-top: 0;}
+            h1 {
+                font-size: 24px;
+                font-weight: 700;
+                line-height: 36px;
+                margin-top: 0;
+                margin-bottom: 12px;
+            }
+            h2 {
+                font-size: 14.4px;
+                font-weight: 700;
+                line-height: 21.6px;
+                margin-top: 0;
+                margin-bottom: 16px;
+                text-transform: uppercase;
+                border-bottom: 1px solid var(--black);
+                padding-bottom: 8px;
+            }
+            h3 {
+                font-size: 12px;
+                font-weight: 700;
+                line-height: 18px;
+                margin-top: 0;
+            }
 
-        .app-layout {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
+            .app-layout {
+                display: flex;
+                flex-direction: column;
+                min-height: 100vh;
+            }
 
-        .main-content {
-            flex-grow: 1;
-            padding: 24px;
-            width: 100%;
-            max-width: 1200px;
-            box-sizing: border-box;
-            margin: 0 auto;
-        }
-        @media (min-width: 1025px) {
             .main-content {
-                padding: 48px;
+                flex-grow: 1;
+                padding: 24px;
+                width: 100%;
+                max-width: 1200px;
+                box-sizing: border-box;
+                margin: 0 auto;
             }
-        }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 24px;
-        }
-        @media (min-width: 1025px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr 1.5fr;
-            }
-            .full-width {
-                grid-column: 1 / -1;
-            }
-        }
-
-        .objective-box {
-            background-color: var(--white);
-            border: 2px solid var(--black);
-            padding: 16px;
-        }
-
-        .data-card {
-            background-color: var(--white);
-            border: 1px solid var(--black);
-            padding: 24px;
-            height: 100%;
-            box-sizing: border-box;
-        }
-
-        .form-group { margin-bottom: 16px; }
-        label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 12px;}
-        .caption { color: var(--gray-med); font-size: 11px; font-weight: 400; display: block; margin-top: 4px; }
-
-        input[type="text"], input[type="file"], input[type="number"] {
-            background-color: var(--white);
-            color: var(--black);
-            font-size: 13.3333px;
-            font-family: var(--font-sans);
-            padding: 12px;
-            border: 1px solid var(--black);
-            border-radius: 0px;
-            height: 40px;
-            width: 100%;
-            box-sizing: border-box;
-            transition: border-color 100ms ease-in-out;
-        }
-        
-        input[type="file"] {
-            padding: 0;
-            cursor: pointer;
-            line-height: 38px;
-        }
-
-        input[type="file"]::file-selector-button,
-        input[type="file"]::-webkit-file-upload-button {
-            background-color: var(--black);
-            color: var(--white);
-            font-size: 12px;
-            font-weight: 700;
-            font-family: var(--font-mono);
-            padding: 0 16px;
-            border: none;
-            border-right: 1px solid var(--black);
-            height: 40px;
-            cursor: pointer;
-            text-transform: uppercase;
-            margin-right: 12px;
-            transition: background-color 100ms;
-            float: left;
-        }
-        input[type="file"]::file-selector-button:hover,
-        input[type="file"]::-webkit-file-upload-button:hover {
-            background-color: var(--near-black);
-        }
-
-        input[type="text"]:focus, input[type="number"]:focus {
-            border-color: var(--near-black);
-            box-shadow: inset 0px 0px 0px 2px rgba(0, 0, 0, 0.1);
-            outline: none;
-        }
-        input:disabled {
-            background-color: #F5F5F5; color: var(--gray-warm); border-color: var(--gray-med); cursor: not-allowed;
-        }
-
-        .btn-primary {
-            background-color: var(--black);
-            color: var(--white);
-            font-size: 13.2px;
-            font-weight: 700;
-            font-family: var(--font-mono);
-            padding: 18px;
-            border: 2px solid var(--black);
-            border-radius: 0px;
-            height: 58px;
-            width: 100%;
-            max-width: 257px;
-            cursor: pointer;
-            transition: all 150ms ease-in-out;
-            text-transform: uppercase;
-        }
-        .btn-primary:hover { background-color: var(--near-black); border-color: var(--near-black); }
-        .btn-primary:active { transform: translate(0px, 2px); box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.5); }
-
-        .btn-secondary {
-            background-color: transparent;
-            color: var(--black);
-            font-size: 13.2px;
-            font-weight: 700;
-            font-family: var(--font-mono);
-            padding: 18px;
-            border: 2px solid var(--black);
-            border-radius: 0px;
-            height: 58px;
-            width: 100%;
-            max-width: 257px;
-            cursor: pointer;
-            transition: all 150ms ease-in-out;
-            text-transform: uppercase;
-        }
-        .btn-secondary:hover { background-color: var(--black); color: var(--white); }
-        .btn-secondary:active { transform: translate(0px, 2px); border-color: var(--near-black); }
-
-        table { width: 100%; border-collapse: collapse; margin-top: 16px; border: 1px solid var(--black); }
-        th, td { padding: 12px; border: 1px solid var(--black); text-align: left; }
-        th { font-weight: 700; font-size: 12px; }
-        td { font-size: 13px; }
-        .action-buttons { display: flex; gap: 8px; }
-        .btn-icon {
-            height: 32px;
-            width: 32px;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: transparent;
-            color: var(--black);
-            border: 1px solid var(--black);
-            cursor: pointer;
-            transition: all 100ms ease-in-out;
-        }
-        .btn-icon:hover { background-color: var(--black); color: var(--white); }
-        .btn-icon:active { transform: translate(0px, 2px); }
-        .btn-icon svg { pointer-events: none; stroke: currentColor; }
-
-        .topology-grid {
-            display: grid;
-            gap: 16px;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        }
-        .node-card {
-            border: 1px solid var(--black);
-            padding: 16px;
-            background: var(--white);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        .badge-success {
-            background-color: var(--green);
-            color: var(--black);
-            font-size: 11px;
-            font-weight: 700;
-            padding: 4px 8px;
-            border: 1px solid var(--green);
-            display: inline-block;
-        }
-        .badge-inactive {
-            background-color: transparent;
-            color: var(--gray-med);
-            font-size: 11px;
-            font-weight: 700;
-            padding: 4px 8px;
-            border: 1px solid var(--black);
-            display: inline-block;
-        }
-
-        #loader {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); color: var(--green); justify-content: center; align-items: center; z-index: 1000;
-        }
-        #loader h2 { border: none; color: var(--green); font-size: 24px; }
-        
-        summary::-webkit-details-marker { display: none; }
-        summary::before { content: "[+] "; margin-right: 8px; }
-        details[open] summary::before { content: "[-] "; }
-    </style>
-</head>
-<body>
-
-    <div id="loader"><h2>PROCESSING_REQUEST...</h2></div>
-
-    <div class="app-layout">
-        <main class="main-content">
-            <div style="border-bottom: 2px solid var(--black); margin-bottom: 24px; padding-bottom: 12px; display: flex; flex-direction: column; gap: 4px;">
-                <h1 style="margin: 0; display: flex; align-items: center; gap: 12px;">SecStore.Sys <span style="font-size: 14px; font-weight: 400; padding: 4px 8px; border: 1px solid var(--black); background: var(--black); color: var(--white);">DISTRIBUTED OBJECT STORE</span></h1>
-                <p style="color: var(--gray-med); font-weight: 700; margin: 0;">INTEGRITY GUARANTEED. FAULT-TOLERANT.</p>
-            </div>
-
-            <div class="dashboard-grid">
-                <!-- Explainer Banner -->
-                <details id="how-it-works" class="objective-box full-width" open style="cursor: pointer;">
-                    <summary style="font-size: 14.4px; font-weight: 700; outline: none; text-transform: uppercase; list-style: none;">
-                        SYSTEM MATH // GALOIS FIELD MULTIPLICATION
-                    </summary>
-                    <div style="margin-top: 12px; cursor: default; border-top: 1px solid var(--black); padding-top: 12px;">
-                        <p style="margin-top: 0; margin-bottom: 12px;">
-                            Files are split into chunks using <b>Galois Field matrix multiplication</b>.
-                            <br><br>
-                            <b>k</b> = Required pieces to rebuild. <b>n</b> = Total distributed chunks.
-                            <br><em>Fault Tolerance:</em> n - k nodes can fail without data loss.
-                        </p>
-                        <p style="margin-top: 0; margin-bottom: 0; font-size: 12px; color: var(--gray-med); font-family: var(--font-mono); line-height: 1.4;">
-                            <b>[ RECOVERY_LOGIC ]</b>: Missing bytes are recovered by inverting the encoding matrix (G) using Gaussian Elimination over GF(2^8) and multiplying it by surviving fragments (D = G_inv * C_survive).
-                        </p>
-                    </div>
-                </details>
-
-                <!-- Upload Section -->
-                <div id="upload" class="data-card">
-                    <h2>IO.UPLOAD_NODE</h2>
-                    <form id="uploadForm">
-                        <div class="form-group">
-                            <label>SELECT_LOCAL_FILE: <span class="caption">LIMIT: 20MB</span></label>
-                            <input type="file" id="fileInput" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>VIRTUAL_PATH:</label>
-                            <input type="text" id="virtualPath" placeholder="my_file.txt" required>
-                        </div>
-                        
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                            <div class="form-group">
-                                <label>DATA_FRAGMENTS (k): <span class="caption">Min nodes to rebuild.</span></label>
-                                <input type="number" id="kInput" value="2" min="1" max="10" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>TOTAL_FRAGMENTS (n): <span class="caption">Total chunks.</span></label>
-                                <input type="number" id="nInput" value="3" min="2" max="15" required>
-                            </div>
-                        </div>
-
-                        <button type="submit" class="btn-primary" style="margin-top: 12px;">EXECUTE.UPLOAD()</button>
-                    </form>
-                </div>
-
-                <!-- File List Section -->
-                <div id="vault" class="data-card">
-                    <h2>VAULT.INDEX</h2>
-                    <button onclick="fetchFiles()" class="btn-secondary" style="height: 40px; padding: 0 16px; width: auto; margin-bottom: 8px;">REFRESH_INDEX</button>
-                    
-                    <div style="overflow-x: auto;">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>FILENAME</th>
-                                    <th>SIZE</th>
-                                    <th>k</th>
-                                    <th>n</th>
-                                    <th>ACTIONS</th>
-                                </tr>
-                            </thead>
-                            <tbody id="fileTableBody">
-                                <!-- Data populated by JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Cluster Topology Section -->
-                <div id="topology" class="data-card full-width">
-                    <h2>NET.TOPOLOGY</h2>
-                    <p class="caption" style="margin-bottom: 24px; font-size: 12px; line-height: 18px;">
-                        Toggling nodes off simulates crashes. If at least <b>k</b> survive, <b>Read-Repair</b> reconstructs and heals the cluster in the background.
-                    </p>
-                    <div id="topologyContainer" class="topology-grid">
-                        <!-- Data populated by JS -->
-                    </div>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <script>
-        const API_BASE = window.location.origin;
-
-        function showLoader() { document.getElementById('loader').style.display = 'flex'; }
-        function hideLoader() { document.getElementById('loader').style.display = 'none'; }
-
-        // Fetch and display files
-        async function fetchFiles() {
-            try {
-                const response = await fetch(`${API_BASE}/list/`);
-                const files = await response.json();
-                
-                const tbody = document.getElementById('fileTableBody');
-                tbody.innerHTML = '';
-
-                if(files.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--gray-med);">[ SYSTEM.VAULT IS EMPTY ]</td></tr>';
-                    return;
+            @media (min-width: 1025px) {
+                .main-content {
+                    padding: 48px;
                 }
+            }
 
-                files.forEach(file => {
-                    const tr = document.createElement('tr');
-                    const sizeKB = (file.size_bytes / 1024).toFixed(2);
-                    
-                    tr.innerHTML = `
+            .dashboard-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+            @media (min-width: 1025px) {
+                .dashboard-grid {
+                    grid-template-columns: 1fr 1.5fr;
+                }
+                .full-width {
+                    grid-column: 1 / -1;
+                }
+            }
+
+            .objective-box {
+                background-color: var(--white);
+                border: 2px solid var(--black);
+                padding: 16px;
+            }
+
+            .data-card {
+                background-color: var(--white);
+                border: 1px solid var(--black);
+                padding: 24px;
+                height: 100%;
+                box-sizing: border-box;
+            }
+
+            .form-group {
+                margin-bottom: 16px;
+            }
+            label {
+                display: block;
+                font-weight: 700;
+                margin-bottom: 8px;
+                font-size: 12px;
+            }
+            .caption {
+                color: var(--gray-med);
+                font-size: 11px;
+                font-weight: 400;
+                display: block;
+                margin-top: 4px;
+            }
+
+            input[type="text"],
+            input[type="file"],
+            input[type="number"] {
+                background-color: var(--white);
+                color: var(--black);
+                font-size: 13.3333px;
+                font-family: var(--font-sans);
+                padding: 12px;
+                border: 1px solid var(--black);
+                border-radius: 0px;
+                height: 40px;
+                width: 100%;
+                box-sizing: border-box;
+                transition: border-color 100ms ease-in-out;
+            }
+
+            input[type="file"] {
+                padding: 0;
+                cursor: pointer;
+                line-height: 38px;
+            }
+
+            input[type="file"]::file-selector-button,
+            input[type="file"]::-webkit-file-upload-button {
+                background-color: var(--black);
+                color: var(--white);
+                font-size: 12px;
+                font-weight: 700;
+                font-family: var(--font-mono);
+                padding: 0 16px;
+                border: none;
+                border-right: 1px solid var(--black);
+                height: 40px;
+                cursor: pointer;
+                text-transform: uppercase;
+                margin-right: 12px;
+                transition: background-color 100ms;
+                float: left;
+            }
+            input[type="file"]::file-selector-button:hover,
+            input[type="file"]::-webkit-file-upload-button:hover {
+                background-color: var(--near-black);
+            }
+
+            input[type="text"]:focus,
+            input[type="number"]:focus {
+                border-color: var(--near-black);
+                box-shadow: inset 0px 0px 0px 2px rgba(0, 0, 0, 0.1);
+                outline: none;
+            }
+            input:disabled {
+                background-color: #f5f5f5;
+                color: var(--gray-warm);
+                border-color: var(--gray-med);
+                cursor: not-allowed;
+            }
+
+            .btn-primary {
+                background-color: var(--black);
+                color: var(--white);
+                font-size: 13.2px;
+                font-weight: 700;
+                font-family: var(--font-mono);
+                padding: 18px;
+                border: 2px solid var(--black);
+                border-radius: 0px;
+                height: 58px;
+                width: 100%;
+                max-width: 257px;
+                cursor: pointer;
+                transition: all 150ms ease-in-out;
+                text-transform: uppercase;
+            }
+            .btn-primary:hover {
+                background-color: var(--near-black);
+                border-color: var(--near-black);
+            }
+            .btn-primary:active {
+                transform: translate(0px, 2px);
+                box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.5);
+            }
+
+            .btn-secondary {
+                background-color: transparent;
+                color: var(--black);
+                font-size: 13.2px;
+                font-weight: 700;
+                font-family: var(--font-mono);
+                padding: 18px;
+                border: 2px solid var(--black);
+                border-radius: 0px;
+                height: 58px;
+                width: 100%;
+                max-width: 257px;
+                cursor: pointer;
+                transition: all 150ms ease-in-out;
+                text-transform: uppercase;
+            }
+            .btn-secondary:hover {
+                background-color: var(--black);
+                color: var(--white);
+            }
+            .btn-secondary:active {
+                transform: translate(0px, 2px);
+                border-color: var(--near-black);
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 16px;
+                border: 1px solid var(--black);
+            }
+            th,
+            td {
+                padding: 12px;
+                border: 1px solid var(--black);
+                text-align: left;
+            }
+            th {
+                font-weight: 700;
+                font-size: 12px;
+            }
+            td {
+                font-size: 13px;
+            }
+            .action-buttons {
+                display: flex;
+                gap: 8px;
+            }
+            .btn-icon {
+                height: 32px;
+                width: 32px;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background-color: transparent;
+                color: var(--black);
+                border: 1px solid var(--black);
+                cursor: pointer;
+                transition: all 100ms ease-in-out;
+            }
+            .btn-icon:hover {
+                background-color: var(--black);
+                color: var(--white);
+            }
+            .btn-icon:active {
+                transform: translate(0px, 2px);
+            }
+            .btn-icon svg {
+                pointer-events: none;
+                stroke: currentColor;
+            }
+
+            .topology-grid {
+                display: grid;
+                gap: 16px;
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            }
+            .node-card {
+                border: 1px solid var(--black);
+                padding: 16px;
+                background: var(--white);
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .badge-success {
+                background-color: var(--green);
+                color: var(--black);
+                font-size: 11px;
+                font-weight: 700;
+                padding: 4px 8px;
+                border: 1px solid var(--green);
+                display: inline-block;
+            }
+            .badge-inactive {
+                background-color: transparent;
+                color: var(--gray-med);
+                font-size: 11px;
+                font-weight: 700;
+                padding: 4px 8px;
+                border: 1px solid var(--black);
+                display: inline-block;
+            }
+
+            #loader {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.85);
+                color: var(--green);
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            }
+            #loader h2 {
+                border: none;
+                color: var(--green);
+                font-size: 24px;
+            }
+
+            summary::-webkit-details-marker {
+                display: none;
+            }
+            summary::before {
+                content: "[+] ";
+                margin-right: 8px;
+            }
+            details[open] summary::before {
+                content: "[-] ";
+            }
+        </style>
+    </head>
+    <body>
+        <div id="loader"><h2>PROCESSING_REQUEST...</h2></div>
+
+        <div class="app-layout">
+            <main class="main-content">
+                <div
+                    style="
+                        margin-bottom: 24px;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 4px;
+                    "
+                >
+                    <h1
+                        style="
+                            margin: 0;
+                            display: flex;
+                            align-items: center;
+                            gap: 12px;
+                        "
+                    >
+                        SecStore.Sys
+                        <span
+                            style="
+                                font-size: 14px;
+                                font-weight: 400;
+                                padding: 4px 8px;
+                                border: 1px solid var(--black);
+                                background: var(--black);
+                                color: var(--white);
+                            "
+                            >DISTRIBUTED OBJECT STORE</span
+                        >
+                    </h1>
+                </div>
+
+                <div class="dashboard-grid">
+                    <!-- Explainer Banner -->
+                    <details
+                        id="how-it-works"
+                        class="objective-box full-width"
+                        open
+                        style="cursor: pointer"
+                    >
+                        <summary
+                            style="
+                                font-size: 14.4px;
+                                font-weight: 700;
+                                outline: none;
+                                text-transform: uppercase;
+                                list-style: none;
+                            "
+                        >
+                            SYSTEM MATH // GALOIS FIELD MULTIPLICATION
+                        </summary>
+                        <div
+                            style="
+                                margin-top: 12px;
+                                cursor: default;
+                                border-top: 1px solid var(--black);
+                                padding-top: 12px;
+                            "
+                        >
+                            <p style="margin-top: 0; margin-bottom: 12px">
+                                Files are split into chunks using
+                                <b>Galois Field matrix multiplication</b>.
+                                <br /><br />
+                                <b>k</b> = Required pieces to rebuild.
+                                <b>n</b> = Total distributed chunks. <br /><em
+                                    >Fault Tolerance:</em
+                                >
+                                n - k nodes can fail without data loss.
+                            </p>
+                            <p
+                                style="
+                                    margin-top: 0;
+                                    margin-bottom: 0;
+                                    font-size: 12px;
+                                    color: var(--gray-med);
+                                    font-family: var(--font-mono);
+                                    line-height: 1.4;
+                                "
+                            >
+                                <b>[ RECOVERY_LOGIC ]</b>: Missing bytes are
+                                recovered by inverting the encoding matrix (G)
+                                using Gaussian Elimination over GF(2^8) and
+                                multiplying it by surviving fragments (D = G_inv
+                                * C_survive).
+                            </p>
+                        </div>
+                    </details>
+
+                    <!-- Upload Section -->
+                    <div id="upload" class="data-card">
+                        <h2>IO.UPLOAD_NODE</h2>
+                        <form id="uploadForm">
+                            <div class="form-group">
+                                <label
+                                    >SELECT_LOCAL_FILE:
+                                    <span class="caption"
+                                        >LIMIT: 20MB</span
+                                    ></label
+                                >
+                                <input type="file" id="fileInput" required />
+                            </div>
+
+                            <div
+                                style="
+                                    display: grid;
+                                    grid-template-columns: 1fr 1fr;
+                                    gap: 16px;
+                                "
+                            >
+                                <div class="form-group">
+                                    <label
+                                        >DATA_FRAGMENTS (k):
+                                        <span class="caption"
+                                            >Min nodes to rebuild.</span
+                                        ></label
+                                    >
+                                    <input
+                                        type="number"
+                                        id="kInput"
+                                        value="2"
+                                        min="1"
+                                        max="10"
+                                        required
+                                    />
+                                </div>
+
+                                <div class="form-group">
+                                    <label
+                                        >TOTAL_FRAGMENTS (n):
+                                        <span class="caption"
+                                            >Total chunks.</span
+                                        ></label
+                                    >
+                                    <input
+                                        type="number"
+                                        id="nInput"
+                                        value="3"
+                                        min="2"
+                                        max="15"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                class="btn-primary"
+                                style="margin-top: 12px"
+                            >
+                                EXECUTE.UPLOAD()
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- File List Section -->
+                    <div id="vault" class="data-card">
+                        <h2>VAULT.INDEX</h2>
+                        <button
+                            onclick="fetchFiles()"
+                            class="btn-secondary"
+                            style="
+                                height: 40px;
+                                padding: 0 16px;
+                                width: auto;
+                                margin-bottom: 8px;
+                            "
+                        >
+                            REFRESH_INDEX
+                        </button>
+
+                        <div style="overflow-x: auto">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>FILENAME</th>
+                                        <th>SIZE</th>
+                                        <th>k</th>
+                                        <th>n</th>
+                                        <th>ACTIONS</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fileTableBody">
+                                    <!-- Data populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Cluster Topology Section -->
+                    <div id="topology" class="data-card full-width">
+                        <h2>NET.TOPOLOGY</h2>
+                        <p
+                            class="caption"
+                            style="
+                                margin-bottom: 24px;
+                                font-size: 12px;
+                                line-height: 18px;
+                            "
+                        >
+                            Toggling nodes off simulates crashes. If at least
+                            <b>k</b> survive, <b>Read-Repair</b> reconstructs
+                            and heals the cluster in the background.
+                        </p>
+                        <div id="topologyContainer" class="topology-grid">
+                            <!-- Data populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Live Matrix Terminal -->
+                    <div id="terminal" class="data-card full-width">
+                        <h2>// LIVE_MATRIX_STREAM</h2>
+                        <div
+                            id="matrix-log"
+                            style="
+                                background: #000000;
+                                color: #00ff00;
+                                font-family: &quot;Courier New&quot;, monospace;
+                                font-size: 11px;
+                                line-height: 16px;
+                                padding: 12px;
+                                height: 140px;
+                                overflow-y: auto;
+                                border: 1px solid #000000;
+                                white-space: pre-wrap;
+                                word-break: break-all;
+                            "
+                        ></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <script>
+            const API_BASE = window.location.origin;
+
+            function showLoader() {
+                document.getElementById("loader").style.display = "flex";
+            }
+            function hideLoader() {
+                document.getElementById("loader").style.display = "none";
+            }
+
+            // Fetch and display files
+            async function fetchFiles() {
+                try {
+                    const response = await fetch(`${API_BASE}/list/`);
+                    const files = await response.json();
+
+                    const tbody = document.getElementById("fileTableBody");
+                    tbody.innerHTML = "";
+
+                    if (files.length === 0) {
+                        tbody.innerHTML =
+                            '<tr><td colspan="5" style="text-align: center; color: var(--gray-med);">[ SYSTEM.VAULT IS EMPTY ]</td></tr>';
+                        return;
+                    }
+
+                    files.forEach((file) => {
+                        const tr = document.createElement("tr");
+                        const sizeKB = (file.size_bytes / 1024).toFixed(2);
+
+                        tr.innerHTML = `
                         <td style="word-break: break-all; font-weight: 700;">${file.filename}</td>
                         <td>${sizeKB} KB</td>
-                        <td>${file.k !== undefined ? file.k : '-'}</td>
-                        <td>${file.n !== undefined ? file.n : '-'}</td>
+                        <td>${file.k !== undefined ? file.k : "-"}</td>
+                        <td>${file.n !== undefined ? file.n : "-"}</td>
                         <td class="action-buttons">
                             <button class="btn-icon" title="DOWNLOAD" onclick="downloadFile('${file.filename}')">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -372,157 +613,202 @@
                             </button>
                         </td>
                     `;
-                    tbody.appendChild(tr);
-                });
-            } catch (err) {
-                console.error("Failed to fetch files", err);
+                        tbody.appendChild(tr);
+                    });
+                } catch (err) {
+                    console.error("Failed to fetch files", err);
+                }
             }
-        }
 
-        // Auto-fill virtual path
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            const virtualPathInput = document.getElementById('virtualPath');
-            if (this.files.length > 0) {
-                virtualPathInput.value = this.files[0].name;
-            }
-        });
-
-        // Upload a file
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const fileInput = document.getElementById('fileInput');
-            const virtualPath = document.getElementById('virtualPath').value;
-            const kVal = document.getElementById('kInput').value;
-            const nVal = document.getElementById('nInput').value;
-
-            if (fileInput.files.length === 0) return;
-
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-            formData.append('custom_filename', virtualPath);
-            formData.append('k', kVal);
-            formData.append('n', nVal);
-
-            showLoader();
-            try {
-                const response = await fetch(`${API_BASE}/upload/`, {
-                    method: 'POST',
-                    body: formData
+            // Auto-fill virtual path
+            document
+                .getElementById("fileInput")
+                .addEventListener("change", function (e) {
+                    const virtualPathInput =
+                        document.getElementById("virtualPath");
+                    if (this.files.length > 0) {
+                        virtualPathInput.value = this.files[0].name;
+                    }
                 });
 
-                if (response.ok) {
-                    alert('UPLOAD_SUCCESS');
-                    fileInput.value = '';
-                    document.getElementById('virtualPath').value = '';
-                    fetchFiles();
-                } else {
-                    const error = await response.json();
-                    alert(`ERR: ${error.detail || JSON.stringify(error)}`);
-                }
-            } catch (err) {
-                alert(`SYS_ERROR: ${err.message}`);
-            } finally {
-                hideLoader();
-            }
-        });
+            // Upload a file
+            document
+                .getElementById("uploadForm")
+                .addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    const fileInput = document.getElementById("fileInput");
+                    const kVal = document.getElementById("kInput").value;
+                    const nVal = document.getElementById("nInput").value;
 
-        // Download a file
-        async function downloadFile(filename) {
-            showLoader();
-            try {
-                const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
-                const response = await fetch(url);
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = downloadUrl;
-                    a.download = filename.split('/').pop();
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(downloadUrl);
-                } else {
-                    const errorData = await response.json();
-                    alert(`DL_FAILED: ${errorData.detail || 'RECONSTRUCTION_FAILED'}`);
-                }
-            } catch(e) {
-                alert(`NET_ERROR: ${e.message}`);
-            } finally {
-                hideLoader();
-            }
-        }
+                    if (fileInput.files.length === 0) return;
 
-        // Delete a file
-        async function deleteFile(filename) {
-            if(!confirm(`PURGE ${filename}?`)) return;
-            showLoader();
-            try {
-                const url = `${API_BASE}/delete/${encodeURIComponent(filename)}`;
-                const response = await fetch(url, { method: 'DELETE' });
-                if (response.ok) {
-                    fetchFiles();
-                } else {
-                    const errorData = await response.json();
-                    alert(`PURGE_FAILED: ${errorData.detail}`);
-                }
-            } catch(e) {
-                alert(`NET_ERROR: ${e.message}`);
-            } finally {
-                hideLoader();
-            }
-        }
+                    const formData = new FormData();
+                    formData.append("file", fileInput.files[0]);
+                    formData.append("custom_filename", fileInput.files[0].name);
+                    formData.append("k", kVal);
+                    formData.append("n", nVal);
 
-        // Fetch and display topology
-        async function fetchTopology() {
-            try {
-                const res = await fetch(`${API_BASE}/admin/topology`);
-                const topology = await res.json();
-                
-                const container = document.getElementById('topologyContainer');
-                container.innerHTML = '';
-                
-                for (const [nodeUrl, info] of Object.entries(topology)) {
-                    const div = document.createElement('div');
-                    div.className = 'node-card';
-                    
-                    const badgeHtml = info.active 
-                        ? `<span class="badge-success">ACTIVE</span>`
-                        : `<span class="badge-inactive">OFFLINE</span>`;
-                    
-                    div.innerHTML = `
+                    showLoader();
+                    try {
+                        const response = await fetch(`${API_BASE}/upload/`, {
+                            method: "POST",
+                            body: formData,
+                        });
+
+                        if (response.ok) {
+                            fileInput.value = "";
+                            fetchFiles();
+                        } else {
+                            const error = await response.json();
+                            alert(
+                                `ERR: ${error.detail || JSON.stringify(error)}`,
+                            );
+                        }
+                    } catch (err) {
+                        alert(`SYS_ERROR: ${err.message}`);
+                    } finally {
+                        hideLoader();
+                    }
+                });
+
+            // Download a file
+            async function downloadFile(filename) {
+                showLoader();
+                try {
+                    const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
+                    const response = await fetch(url);
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const downloadUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = downloadUrl;
+                        a.download = filename.split("/").pop();
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(downloadUrl);
+                    } else {
+                        const errorData = await response.json();
+                        alert(
+                            `DL_FAILED: ${errorData.detail || "RECONSTRUCTION_FAILED"}`,
+                        );
+                    }
+                } catch (e) {
+                    alert(`NET_ERROR: ${e.message}`);
+                } finally {
+                    hideLoader();
+                }
+            }
+
+            // Delete a file
+            async function deleteFile(filename) {
+                if (!confirm(`PURGE ${filename}?`)) return;
+                showLoader();
+                try {
+                    const url = `${API_BASE}/delete/${encodeURIComponent(filename)}`;
+                    const response = await fetch(url, { method: "DELETE" });
+                    if (response.ok) {
+                        fetchFiles();
+                    } else {
+                        const errorData = await response.json();
+                        alert(`PURGE_FAILED: ${errorData.detail}`);
+                    }
+                } catch (e) {
+                    alert(`NET_ERROR: ${e.message}`);
+                } finally {
+                    hideLoader();
+                }
+            }
+
+            // Fetch and display topology
+            async function fetchTopology() {
+                try {
+                    const res = await fetch(`${API_BASE}/admin/topology`);
+                    const topology = await res.json();
+
+                    const container =
+                        document.getElementById("topologyContainer");
+                    container.innerHTML = "";
+
+                    for (const [nodeUrl, info] of Object.entries(topology)) {
+                        const div = document.createElement("div");
+                        div.className = "node-card";
+
+                        const badgeHtml = info.active
+                            ? `<span class="badge-success">ACTIVE</span>`
+                            : `<span class="badge-inactive">OFFLINE</span>`;
+
+                        let ramBarHtml = "";
+                        if (info.metrics) {
+                            const mb = info.metrics.rss_mb.toFixed(1);
+                            const pct = Math.min(
+                                (info.metrics.rss_mb / 150) * 100,
+                                100,
+                            ).toFixed(0);
+                            const filled = Math.round(pct / 10);
+                            const empty = 10 - filled;
+                            ramBarHtml = `<div style="font-size:10px;font-weight:700;margin-bottom:4px;">RAM: ${mb}MB</div><div style="font-family:monospace;letter-spacing:1px;">${"█".repeat(filled)}${"░".repeat(empty)} ${pct}%</div>`;
+                        }
+
+                        div.innerHTML = `
                         <div style="font-weight: 700; word-break: break-all; font-size: 13px;">${nodeUrl}</div>
                         <div style="font-size: 11px; color: var(--gray-med);">ZONE: ${info.zone}</div>
                         <div>${badgeHtml}</div>
+                        <div style="margin-top: 8px;">${ramBarHtml}</div>
                         <button class="btn-secondary" onclick="toggleNodePower('${nodeUrl}')" style="margin-top: auto; height: 32px; padding: 0 8px; width: 100%; font-size: 11px;">TOGGLE</button>
                     `;
-                    container.appendChild(div);
+                        container.appendChild(div);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch topology", e);
                 }
-            } catch (e) {
-                console.error("Failed to fetch topology", e);
             }
-        }
 
-        async function toggleNodePower(nodeUrl) {
-            try {
-                showLoader();
-                await fetch(`${API_BASE}/admin/topology/toggle`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ node_url: nodeUrl })
-                });
-                await fetchTopology();
-            } catch (e) {
-                alert("CMD_FAILED");
-            } finally {
-                hideLoader();
+            async function toggleNodePower(nodeUrl) {
+                try {
+                    showLoader();
+                    await fetch(`${API_BASE}/admin/topology/toggle`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ node_url: nodeUrl }),
+                    });
+                    await fetchTopology();
+                } catch (e) {
+                    alert("CMD_FAILED");
+                } finally {
+                    hideLoader();
+                }
             }
-        }
 
-        fetchFiles();
-        fetchTopology();
-        setInterval(fetchTopology, 5000);
-    </script>
-</body>
+            // WebSocket connection for live matrix terminal
+            const matrixLog = document.getElementById("matrix-log");
+            function connectMatrix() {
+                const proto =
+                    window.location.protocol === "https:" ? "wss:" : "ws:";
+                const wsUrl = `${proto}//${window.location.host}/ws/stream`;
+                const ws = new WebSocket(wsUrl);
+                ws.onopen = () => {
+                    matrixLog.textContent += "[WS] Matrix stream connected.\n";
+                };
+                ws.onmessage = (evt) => {
+                    matrixLog.textContent += evt.data;
+                    matrixLog.scrollTop = matrixLog.scrollHeight;
+                };
+                ws.onclose = () => {
+                    matrixLog.textContent +=
+                        "[WS] Connection lost. Reconnecting in 5s...\n";
+                    setTimeout(connectMatrix, 5000);
+                };
+                ws.onerror = () => {
+                    ws.close();
+                };
+            }
+            connectMatrix();
+
+            fetchFiles();
+            fetchTopology();
+            setInterval(fetchTopology, 5000);
+        </script>
+    </body>
 </html>
