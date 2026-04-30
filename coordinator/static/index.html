@@ -35,43 +35,6 @@
             flex-direction: column;
             min-height: 100vh;
         }
-        @media (min-width: 1025px) {
-            .app-layout {
-                flex-direction: row;
-            }
-        }
-
-        .sidebar {
-            background-color: var(--white);
-            border-bottom: 1px solid var(--black);
-            width: 100%;
-        }
-        @media (min-width: 1025px) {
-            .sidebar {
-                border-bottom: none;
-                border-right: 1px solid var(--black);
-                width: 230px;
-                flex-shrink: 0;
-            }
-        }
-
-        .nav-item {
-            background-color: transparent;
-            color: var(--black);
-            font-size: 12px;
-            font-weight: 400;
-            padding: 14px;
-            border: 1px solid transparent;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            transition: all 100ms ease-in-out;
-            text-decoration: none;
-            box-sizing: border-box;
-        }
-        .nav-item:hover { background-color: #F5F5F5; border: 1px solid var(--black); }
-        .nav-item:active { background-color: var(--black); color: var(--white); border: 1px solid var(--black); }
 
         .main-content {
             flex-grow: 1;
@@ -84,7 +47,20 @@
         @media (min-width: 1025px) {
             .main-content {
                 padding: 48px;
-                margin: 0;
+            }
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+        @media (min-width: 1025px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr 1.5fr;
+            }
+            .full-width {
+                grid-column: 1 / -1;
             }
         }
 
@@ -92,14 +68,14 @@
             background-color: var(--white);
             border: 2px solid var(--black);
             padding: 16px;
-            margin-bottom: 24px;
         }
 
         .data-card {
             background-color: var(--white);
             border: 1px solid var(--black);
             padding: 24px;
-            margin-bottom: 24px;
+            height: 100%;
+            box-sizing: border-box;
         }
 
         .form-group { margin-bottom: 16px; }
@@ -218,96 +194,87 @@
     <div id="loader"><h2>PROCESSING_REQUEST...</h2></div>
 
     <div class="app-layout">
-        <aside class="sidebar">
-            <div style="padding: 24px 14px; border-bottom: 1px solid var(--black);">
-                <h1 style="font-size: 16px; margin: 0; text-transform: uppercase;">SecStore.Sys</h1>
-                <p style="font-size: 11px; color: var(--gray-med); margin: 4px 0 0 0;">DISTRIBUTED_OBJECT_STORE</p>
-            </div>
-            <nav>
-                <a href="#how-it-works" class="nav-item">SYSTEM.MATH</a>
-                <a href="#upload" class="nav-item">IO.UPLOAD_NODE</a>
-                <a href="#vault" class="nav-item">VAULT.INDEX</a>
-                <a href="#topology" class="nav-item">NET.TOPOLOGY</a>
-            </nav>
-        </aside>
-
         <main class="main-content">
-            <h1>DISTRIBUTED OBJECT STORE</h1>
-            <p style="color: var(--gray-med); font-weight: 700; margin-bottom: 36px; margin-top: 0;">INTEGRITY GUARANTEED. FAULT-TOLERANT.</p>
-
-            <!-- Explainer Banner -->
-            <div id="how-it-works" class="objective-box">
-                <h2 style="border-bottom: none; margin-bottom: 8px;">SYSTEM MATH // GALOIS FIELD MULTIPLICATION</h2>
-                <p style="margin-top: 0; margin-bottom: 0;">
-                    Files are not stored whole. They are split into fragments using <strong>Galois Field matrix operations</strong>.
-                    <br><br>
-                    <strong>k</strong> = The exact number of chunks needed to rebuild the file.<br>
-                    <strong>n</strong> = The total number of chunks distributed across the cluster.<br>
-                    <em>Example:</em> If you upload with <strong>k=2, n=5</strong>, your file is split into 5 pieces. You can suffer <strong>3 simultaneous server crashes</strong> (5 - 2) and still flawlessly recover your data.
-                </p>
+            <div style="border-bottom: 2px solid var(--black); margin-bottom: 24px; padding-bottom: 12px; display: flex; flex-direction: column; gap: 4px;">
+                <h1 style="margin: 0; display: flex; align-items: center; gap: 12px;">SecStore.Sys <span style="font-size: 14px; font-weight: 400; padding: 4px 8px; border: 1px solid var(--black); background: var(--black); color: var(--white);">DISTRIBUTED OBJECT STORE</span></h1>
+                <p style="color: var(--gray-med); font-weight: 700; margin: 0;">INTEGRITY GUARANTEED. FAULT-TOLERANT.</p>
             </div>
 
-            <!-- Upload Section -->
-            <div id="upload" class="data-card">
-                <h2>IO.UPLOAD_NODE</h2>
-                <form id="uploadForm">
-                    <div class="form-group">
-                        <label>SELECT_LOCAL_FILE:</label>
-                        <input type="file" id="fileInput" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>VIRTUAL_PATH: <span class="caption">Auto-filled, but entirely editable.</span></label>
-                        <input type="text" id="virtualPath" placeholder="my_file.txt" required>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="dashboard-grid">
+                <!-- Explainer Banner -->
+                <div id="how-it-works" class="objective-box full-width">
+                    <h2 style="border-bottom: none; margin-bottom: 8px;">SYSTEM MATH // GALOIS FIELD MULTIPLICATION</h2>
+                    <p style="margin-top: 0; margin-bottom: 0;">
+                        Files are not stored whole. They are split into fragments using <strong>Galois Field matrix operations</strong>.
+                        <br><br>
+                        <strong>k</strong> = The exact number of chunks needed to rebuild the file.<br>
+                        <strong>n</strong> = The total number of chunks distributed across the cluster.<br>
+                        <em>Example:</em> If you upload with <strong>k=2, n=5</strong>, your file is split into 5 pieces. You can suffer <strong>3 simultaneous server crashes</strong> (5 - 2) and still flawlessly recover your data.
+                    </p>
+                </div>
+
+                <!-- Upload Section -->
+                <div id="upload" class="data-card">
+                    <h2>IO.UPLOAD_NODE</h2>
+                    <form id="uploadForm">
                         <div class="form-group">
-                            <label>DATA_FRAGMENTS (k): <span class="caption">Minimum nodes required to rebuild.</span></label>
-                            <input type="number" id="kInput" value="2" min="1" max="10" required>
+                            <label>SELECT_LOCAL_FILE:</label>
+                            <input type="file" id="fileInput" required>
                         </div>
                         
                         <div class="form-group">
-                            <label>TOTAL_FRAGMENTS (n): <span class="caption">Total pieces generated across network.</span></label>
-                            <input type="number" id="nInput" value="3" min="2" max="15" required>
+                            <label>VIRTUAL_PATH: <span class="caption">Auto-filled, but entirely editable.</span></label>
+                            <input type="text" id="virtualPath" placeholder="my_file.txt" required>
                         </div>
-                    </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div class="form-group">
+                                <label>DATA_FRAGMENTS (k): <span class="caption">Minimum nodes required to rebuild.</span></label>
+                                <input type="number" id="kInput" value="2" min="1" max="10" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>TOTAL_FRAGMENTS (n): <span class="caption">Total pieces generated across network.</span></label>
+                                <input type="number" id="nInput" value="3" min="2" max="15" required>
+                            </div>
+                        </div>
 
-                    <button type="submit" class="btn-primary" style="margin-top: 12px;">EXECUTE.UPLOAD()</button>
-                </form>
-            </div>
-
-            <!-- File List Section -->
-            <div id="vault" class="data-card">
-                <h2>VAULT.INDEX</h2>
-                <button onclick="fetchFiles()" class="btn-secondary" style="height: 40px; padding: 0 16px; width: auto; margin-bottom: 8px;">REFRESH_INDEX</button>
-                
-                <div style="overflow-x: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>FILENAME</th>
-                                <th>SIZE</th>
-                                <th>k</th>
-                                <th>n</th>
-                                <th>ACTIONS</th>
-                            </tr>
-                        </thead>
-                        <tbody id="fileTableBody">
-                            <!-- Data populated by JS -->
-                        </tbody>
-                    </table>
+                        <button type="submit" class="btn-primary" style="margin-top: 12px;">EXECUTE.UPLOAD()</button>
+                    </form>
                 </div>
-            </div>
 
-            <!-- Cluster Topology Section -->
-            <div id="topology" class="data-card">
-                <h2>NET.TOPOLOGY</h2>
-                <p class="caption" style="margin-bottom: 24px; font-size: 12px; line-height: 18px;">
-                    Simulate catastrophic server crashes by toggling power off. As long as at least <strong>k</strong> nodes survive, the Read-Repair engine will instantly reconstruct the file on download and magically revive the missing chunks onto healthy nodes in the background!
-                </p>
-                <div id="topologyContainer" class="topology-grid">
-                    <!-- Data populated by JS -->
+                <!-- File List Section -->
+                <div id="vault" class="data-card">
+                    <h2>VAULT.INDEX</h2>
+                    <button onclick="fetchFiles()" class="btn-secondary" style="height: 40px; padding: 0 16px; width: auto; margin-bottom: 8px;">REFRESH_INDEX</button>
+                    
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>FILENAME</th>
+                                    <th>SIZE</th>
+                                    <th>k</th>
+                                    <th>n</th>
+                                    <th>ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fileTableBody">
+                                <!-- Data populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Cluster Topology Section -->
+                <div id="topology" class="data-card full-width">
+                    <h2>NET.TOPOLOGY</h2>
+                    <p class="caption" style="margin-bottom: 24px; font-size: 12px; line-height: 18px;">
+                        Simulate catastrophic server crashes by toggling power off. As long as at least <strong>k</strong> nodes survive, the Read-Repair engine will instantly reconstruct the file on download and magically revive the missing chunks onto healthy nodes in the background!
+                    </p>
+                    <div id="topologyContainer" class="topology-grid">
+                        <!-- Data populated by JS -->
+                    </div>
                 </div>
             </div>
         </main>
