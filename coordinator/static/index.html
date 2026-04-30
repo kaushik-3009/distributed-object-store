@@ -355,7 +355,7 @@
                             gap: 12px;
                         "
                     >
-                        SecStore.Sys
+                        DistSecStore.Sys
                         <span
                             style="
                                 font-size: 14px;
@@ -375,7 +375,6 @@
                     <details
                         id="how-it-works"
                         class="objective-box full-width"
-                        open
                         style="cursor: pointer"
                     >
                         <summary
@@ -387,7 +386,7 @@
                                 list-style: none;
                             "
                         >
-                            SYSTEM MATH // GALOIS FIELD MULTIPLICATION
+                            System Info
                         </summary>
                         <div
                             style="
@@ -398,30 +397,12 @@
                             "
                         >
                             <p style="margin-top: 0; margin-bottom: 12px">
-                                Files are split into chunks using
-                                <b>Galois Field matrix multiplication</b>.
-                                <br /><br />
-                                <b>k</b> = Required pieces to rebuild.
-                                <b>n</b> = Total distributed chunks. <br /><em
-                                    >Fault Tolerance:</em
-                                >
-                                n - k nodes can fail without data loss.
-                            </p>
-                            <p
-                                style="
-                                    margin-top: 0;
-                                    margin-bottom: 0;
-                                    font-size: 12px;
-                                    color: var(--gray-med);
-                                    font-family: var(--font-mono);
-                                    line-height: 1.4;
-                                "
-                            >
-                                <b>[ RECOVERY_LOGIC ]</b>: Missing bytes are
-                                recovered by inverting the encoding matrix (G)
-                                using Gaussian Elimination over GF(2^8) and
-                                multiplying it by surviving fragments (D = G_inv
-                                * C_survive).
+                                <b>k</b> = pieces to rebuild. <b>n</b> = total
+                                chunks. <b>n-k</b> = simultaneous node failures
+                                tolerated. <br /><br />
+                                Files encoded via
+                                <b>GF(2^8) Vandermonde matrix</b>. Recovered by
+                                Gaussian elimination of any k surviving chunks.
                             </p>
                         </div>
                     </details>
@@ -451,7 +432,7 @@
                                     <label
                                         >DATA_FRAGMENTS (k):
                                         <span class="caption"
-                                            >Min nodes to rebuild.</span
+                                            >Fault tolerance upto: n-k</span
                                         ></label
                                     >
                                     <input
@@ -494,7 +475,7 @@
 
                     <!-- File List Section -->
                     <div id="vault" class="data-card">
-                        <h2>VAULT.INDEX</h2>
+                        <h2>File Vault</h2>
                         <button
                             onclick="fetchFiles()"
                             class="btn-secondary"
@@ -528,7 +509,7 @@
 
                     <!-- Cluster Topology Section -->
                     <div id="topology" class="data-card full-width">
-                        <h2>NET.TOPOLOGY</h2>
+                        <h2>Node Dashboard</h2>
                         <p
                             class="caption"
                             style="
@@ -548,7 +529,7 @@
 
                     <!-- Live Matrix Terminal -->
                     <div id="terminal" class="data-card full-width">
-                        <h2>// LIVE_MATRIX_STREAM</h2>
+                        <h2>System Log</h2>
                         <div
                             id="matrix-log"
                             style="
@@ -751,11 +732,26 @@
                             ramBarHtml = `<div style="font-size:10px;font-weight:700;margin-bottom:4px;">RAM: ${mb}MB</div><div style="font-family:monospace;letter-spacing:1px;">${"█".repeat(filled)}${"░".repeat(empty)} ${pct}%</div>`;
                         }
 
+                        let chunksHtml = "";
+                        if (info.chunks && info.chunks.length > 0) {
+                            const chunkNames = info.chunks
+                                .map(
+                                    (c) =>
+                                        c.filename
+                                            .split("/")
+                                            .pop()
+                                            .split("_")[0],
+                                )
+                                .filter((v, i, a) => a.indexOf(v) === i);
+                            chunksHtml = `<div style="font-size:9px;color:var(--gray-med);margin-top:6px;">CHUNKS: ${info.chunks.length} (${chunkNames.slice(0, 3).join(", ")}${chunkNames.length > 3 ? "..." : ""})</div>`;
+                        }
+
                         div.innerHTML = `
                         <div style="font-weight: 700; word-break: break-all; font-size: 13px;">${nodeUrl}</div>
                         <div style="font-size: 11px; color: var(--gray-med);">ZONE: ${info.zone}</div>
                         <div>${badgeHtml}</div>
                         <div style="margin-top: 8px;">${ramBarHtml}</div>
+                        ${chunksHtml}
                         <button class="btn-secondary" onclick="toggleNodePower('${nodeUrl}')" style="margin-top: auto; height: 32px; padding: 0 8px; width: 100%; font-size: 11px;">TOGGLE</button>
                     `;
                         container.appendChild(div);

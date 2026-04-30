@@ -290,9 +290,24 @@ async def get_file_manifest(filename: str):
 
 @app.get("/admin/topology")
 async def get_topology():
+    conn = sqlite3.connect(DB_FILE)
+    all_files = conn.execute('SELECT filename, file_id, version_id, manifest FROM files').fetchall()
+    conn.close()
+
+    file_map = {}
+    for fname, fid, vid, m_str in all_files:
+        manifest = json.loads(m_str)
+        for idx, meta in manifest.items():
+            node = meta["node"]
+            chunk_id = f"{fid}_{vid}_{idx}"
+            if node not in file_map:
+                file_map[node] = []
+            file_map[node].append({"filename": fname, "chunk": chunk_id})
+
     enriched = {}
     for url, info in CLUSTER_TOPOLOGY.items():
         enriched[url] = info.copy()
+        enriched[url]["chunks"] = file_map.get(url, [])
         if info["active"]:
             try:
                 resp = await http_client.get(f"{url}/metrics", timeout=2.0)
