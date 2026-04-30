@@ -2,254 +2,118 @@
 
 [![Integration Tests](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/tests.yml/badge.svg)](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/tests.yml)
 
-A fault-tolerant distributed storage system that splits files across multiple nodes using custom Reed-Solomon erasure coding (k=2, n=3) and verifies fragment integrity with SHA-256 hashes to detect corruption and prevent "mix-and-match" attacks during reconstruction.
+A fault-tolerant, high-performance distributed storage system featuring **Generalized Reed-Solomon Erasure Coding**, **Merkle-style Deduplication**, and **Geo-Aware Topology Placement**. This system detects data corruption via SHA-256 integrity layers and automatically self-heals corrupted fragments in the background.
 
-You can lose 1 out of 3 storage nodes and the file still comes back. You can corrupt a fragment on a surviving node and the system catches it before it ever touches the decoder.
+## Key Features
+
+- **Custom Erasure Coding**: Manual implementation of Reed-Solomon over GF(2^8) using Vandermonde matrices. Support for dynamic $k$ and $n$.
+- **Active Read-Repair**: Automatic background self-healing. When corruption is detected during a download, the system reconstructs the file and silently restores missing chunks to healthy nodes.
+- **Merkle Deduplication**: Content-addressable storage logic. Identical files uploaded under different names share the same physical fragments, optimizing storage efficiency.
+- **Geo-Aware Placement**: Fragments are distributed across multiple Availability Zones (`us-east-1a`, `us-east-1b`, etc.) to ensure the system survives entire data-center blackouts.
+- **Dynamic Cluster Scaling**: Easily deploy a cluster of any size (3 to 256 nodes) with a single command.
+- **Flash-Sale Aesthetic UI**: A monochromatic, high-contrast, utilitarian dashboard for real-time cluster monitoring and management.
 
 ## How It Works
 
-### Upload Flow
+### Upload Flow (with Deduplication & Geo-Spread)
 
 ```mermaid
 sequenceDiagram
     participant C as Client
     participant Coord as Coordinator
-    participant EC as Reed-Solomon Encoder
-    participant N1 as Node 1
-    participant N2 as Node 2
-    participant N3 as Node 3
+    participant DB as SQLite Manifest
+    participant Nodes as Storage Cluster (Multi-Zone)
 
     C->>Coord: POST /upload/ (file)
-    Coord->>EC: encode(data, k=2, n=3)
-    EC-->>Coord: [D0, D1, P0] + padding_len
-    Coord->>Coord: SHA-256 hash each fragment
-    Coord->>Coord: Store manifest in SQLite
-    par distribute fragments
-        Coord->>N1: POST /upload/{file_id} (D0)
-        Coord->>N2: POST /upload/{file_id} (D1)
-        Coord->>N3: POST /upload/{file_id} (P0)
+    Coord->>Coord: Compute Content Hash (SHA-256)
+    Coord->>DB: Check if Hash exists
+    alt Hash Exists (Deduplication)
+        DB-->>Coord: Existing Metadata
+        Coord->>DB: Create Alias (New Filename -> Existing Chunks)
+        Coord-->>C: 200 OK (Deduplicated)
+    else New Content
+        Coord->>Coord: Reed-Solomon Encode (k, n)
+        Coord->>Coord: Map Fragments to distinct Availability Zones
+        par Parallel Distribute
+            Coord->>Nodes: POST /upload/ (Fragments)
+        end
+        Coord->>DB: Store manifest & Content Hash
+        Coord-->>C: 200 OK
     end
-    N1-->>Coord: 200 OK
-    N2-->>Coord: 200 OK
-    N3-->>Coord: 200 OK
-    Coord-->>C: 200 OK
 ```
 
-### Download Flow (with corruption detection)
+### Download Flow (with Read-Repair)
 
 ```mermaid
 sequenceDiagram
     participant C as Client
     participant Coord as Coordinator
-    participant N1 as Node 1
-    participant N2 as Node 2
-    participant N3 as Node 3
+    participant Nodes as Storage Cluster
+    participant BG as Background Healer
 
     C->>Coord: GET /download/{filename}
-    Coord->>Coord: Lookup manifest (version, hashes)
-    par fetch fragments
-        Coord->>N1: GET /download/{file_id}
-        Coord->>N2: GET /download/{file_id}
-        Coord->>N3: GET /download/{file_id}
+    Coord->>Nodes: Fetch k+ fragments
+    Nodes-->>Coord: Fragment Data
+    Coord->>Coord: Verify SHA-256 Hashes
+    alt Fragment Corrupted
+        Coord->>Coord: Reject Fragment
+        Coord->>Coord: Reconstruct via RS (surviving fragments)
+        Coord->>BG: Trigger Self-Healing Task
+        BG->>Nodes: Push repaired fragment to healthy node
     end
-    N1-->>Coord: D0 bytes
-    N2-->>Coord: D1 bytes (CORRUPTED)
-    N3-->>Coord: P0 bytes
-    Coord->>Coord: Verify SHA-256(D0) == hash_0 ✓
-    Coord->>Coord: Verify SHA-256(D1) == hash_1 ✗ REJECT
-    Coord->>Coord: Verify SHA-256(P0) == hash_2 ✓
-    Coord->>Coord: decode({D0, P0}) → reconstruct D1 via XOR
-    Coord-->>C: StreamingResponse (original file)
+    Coord-->>C: StreamingResponse (reconstructed file)
 ```
-
-### Erasure Coding
-
-The encoder splits each file into 2 data chunks and computes 1 parity chunk. In GF(2^8), addition is XOR, so parity = D0 ^ D1 byte-by-byte.
-
-```mermaid
-flowchart TB
-    subgraph encode["Encode"]
-        A["Original File<br/><i>any size</i>"] --> B["Pad to multiple of k=2"]
-        B --> C["Split into 2 chunks"]
-        C --> D0["D0<br/>first half"]
-        C --> D1["D1<br/>second half"]
-        D0 --> P0["P0 = D0 ⊕ D1<br/><i>XOR byte-by-byte</i>"]
-        D1 --> P0
-    end
-
-    subgraph decode["Reconstruct (any 2 of 3)"]
-        direction LR
-        R1["D0 + D1"] --> O1["direct concat"]
-        R2["D0 + P0"] --> O2["D1 = P0 ⊕ D0"]
-        R3["D1 + P0"] --> O3["D0 = P0 ⊕ D1"]
-    end
-
-    encode ~~~ decode
-```
-
-The Galois Field implementation uses primitive polynomial `x^8 + x^4 + x^3 + x^2 + 1` (0x11D) with precomputed log/antilog tables for fast arithmetic. This isn't just a library wrapping `pyreedsolomon` -- it's the actual field math built from scratch (`coordinator/erasure_coding.py`).
-
-### Integrity Protocol
-
-The problem this solves: if a file gets updated (v1 → v2), a stale node might still hold a v1 fragment. Blindly mixing fragments from different versions produces garbage.
-
-```mermaid
-flowchart TB
-    subgraph manifest["Versioned Manifest (SQLite)"]
-        direction LR
-        M["filename: secret.txt<br/>version: abc-123<br/>hash_0: a3f2c1...<br/>hash_1: 7b9e0d...<br/>hash_2: f1a8c3..."]
-    end
-
-    subgraph verify["Download Verification Loop"]
-        direction TB
-        F["Fetch fragment from node"] --> H["Compute SHA-256(fragment)"]
-        H --> CMP{"hash == manifest entry?"}
-        CMP -->|Yes| ACCEPT["Accept fragment ✓"]
-        CMP -->|No| REJECT["Reject fragment ✗<br/><i>log warning, try parity</i>"]
-    end
-
-    manifest --> verify
-```
-
-Every fragment is cryptographically bound to a specific file version. A corrupted or stale fragment gets rejected before it ever reaches the decoder.
 
 ## Quick Start
 
 We use a `Makefile` to simplify operations:
 
 ```bash
-# Optional: Choose how many nodes to deploy (generates docker-compose.yml)
-make cluster nodes=7
+# 1. Configure cluster for N nodes (e.g., 6 nodes)
+make cluster nodes=6
 
-# start the cluster (1 coordinator + N storage nodes)
+# 2. Start the cluster (1 coordinator + 6 storage nodes)
 make build
 
-# run the integration tests
+# 3. Run integration tests
 make test
 
-# run the interactive demo steps
+# 4. Interactive demo steps
 make demo-upload
 make demo-corrupt
 make demo-download
 
-# shut down and clean up database/storage
+# 5. Shut down and clean up
 make clean
 ```
 
-Or use the CLI manually:
-```bash
-python client.py upload ./myfile.txt /docs/myfile.txt
-python client.py list
-python client.py download /docs/myfile.txt ./downloaded.txt
-python client.py corrupt 3 /docs/myfile.txt
-```
-
-Or open `http://localhost:8000/ui/` for the web dashboard.
+### Access the Dashboard
+Once the cluster is running, open your browser to:
+`http://localhost:8000/ui/`
 
 ## Project Structure
 
 ```
 sec-dist-proj/
 ├── coordinator/
-│   ├── main.py                 # FastAPI service: upload, download, list, admin endpoints
-│   ├── erasure_coding.py       # Custom Reed-Solomon over GF(2^8), k=2, n=3
-│   ├── static/index.html       # Web dashboard
-│   ├── Dockerfile
-│   └── requirements.txt
+│   ├── main.py             # Brain: Deduplication, Geo-Placement, Self-Healing
+│   ├── erasure_coding.py   # Engine: GF(2^8) Matrix Math (Reed-Solomon)
+│   ├── static/index.html   # High-performance Dashboard
 ├── node/
-│   ├── main.py                 # FastAPI service: fragment storage (store/retrieve/delete/corrupt)
-│   ├── Dockerfile
-│   └── requirements.txt
-├── client.py                   # CLI client (upload, download, list, corrupt)
-├── test_suite.py               # Integration tests (healthy, single-corruption, double-corruption)
-├── terraform/main.tf           # AWS infra (VPC, EC2, ECR, SG)
-├── docker-compose.yml          # Local orchestration
-
-```
-
-## API Reference
-
-### Coordinator (port 8000)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/upload/` | Upload a file. Multipart form with `file` field. Optional `custom_filename` query param. |
-| `GET` | `/download/{filename}` | Download a file. Fetches fragments, verifies hashes, decodes, streams back. |
-| `GET` | `/list/` | List stored files. Optional `prefix` query param for filtering. |
-| `POST` | `/admin/corrupt/{node_id}/{filename}` | Corrupt a fragment on a specific node (demo/testing). |
-| `GET` | `/ui/` | Web dashboard. |
-
-### Storage Nodes (port 8000 internally)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check. |
-| `POST` | `/upload/{file_id}` | Store a fragment binary. |
-| `GET` | `/download/{file_id}` | Retrieve a fragment binary. |
-| `DELETE` | `/delete/{file_id}` | Delete a fragment. |
-| `POST` | `/corrupt/{file_id}` | Append garbage bytes to simulate corruption. |
-
-## Running the Tests
-
-The integration tests require the Docker Compose stack to be running:
-
-```bash
-docker-compose up --build -d
-python test_suite.py
-```
-
-Three tests:
-
-| Test | What It Does | Expected Result |
-|------|-------------|-----------------|
-| `test_01_upload_and_download_healthy` | Upload then download with all nodes up | File matches original |
-| `test_02_single_corruption_resilience` | Corrupt fragment on 1 node, then download | System recovers using parity, file matches |
-| `test_03_double_corruption_failure` | Corrupt fragments on 2 nodes, then download | HTTP 500 -- not enough valid fragments |
-
-## Infrastructure
-
-Terraform config (`terraform/main.tf`) provisions a minimal AWS environment:
-
-```mermaid
-flowchart TB
-    subgraph vpc["VPC (10.0.0.0/16)"]
-        subgraph subnet["Public Subnet (10.0.1.0/24)"]
-            subgraph ec2["EC2 t3.micro"]
-                C["Coordinator<br/>:8000"]
-                N1["Node 1<br/>:8001"]
-                N2["Node 2<br/>:8002"]
-                N3["Node 3<br/>:8003"]
-            end
-            SG["Security Group<br/>22 (SSH), 8000 (HTTP)"]
-        end
-    end
-
-    ECR["ECR<br/>container images"]
-    CW["CloudWatch<br/>log aggregation"]
-
-    ECR --> ec2
-    ec2 --> CW
-```
-
-All resources fit within the AWS Free Tier. Spin up for demos, tear down after:
-
-```bash
-cd terraform
-terraform init
-terraform plan
-terraform apply
-# ...demo...
-terraform destroy
+│   ├── main.py             # Simple binary storage service
+├── deploy_cluster.py       # Dynamic Docker-Compose generator
+├── client.py               # CLI Interface
+├── Makefile                # Command orchestrator
+└── test_suite.py           # Integration testing
 ```
 
 ## Tech Stack
 
-- **Python 3.10** / **FastAPI** / **Uvicorn** -- services
-- **httpx** -- async HTTP between coordinator and nodes
-- **SQLite** -- metadata and fragment hash manifest
-- **Docker Compose** -- local orchestration
-- **Terraform** -- AWS infrastructure as code
-- **Vanilla HTML/CSS/JS** -- web dashboard (no framework overhead)
+- **Python 3.10** / **FastAPI** / **Uvicorn**
+- **SQLite** (Content-Hash Manifest)
+- **Docker Compose** (Container Orchestration)
+- **httpx** (Async Internal Communication)
+- **Terraform** (AWS Infrastructure Ready)
 
 ## License
 
