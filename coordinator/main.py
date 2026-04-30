@@ -119,12 +119,22 @@ async def core_upload(filename: str, file_bytes: bytes, k: int, n: int):
     hashes = [get_hash(f) for f in fragments]
     manifest = {}
 
+    upload_tasks = []
     for i, fragment in enumerate(fragments):
         node_url = selected_nodes[i]
         chunk_id = f"{file_id}_{version_id}_{i}"
         files = {'file': (chunk_id, fragment)}
-        await http_client.post(f"{node_url}/upload/{chunk_id}", files=files, timeout=10.0)
-        manifest[str(i)] = {"node": node_url, "hash": hashes[i]}
+        upload_tasks.append(http_client.post(f"{node_url}/upload/{chunk_id}", files=files, timeout=60.0))
+
+    results = await asyncio.gather(*upload_tasks, return_exceptions=True)
+    for i, r in enumerate(results):
+        if isinstance(r, Exception):
+            print(f"    [-] Upload failed for chunk {i}: {r}")
+        else:
+            manifest[str(i)] = {"node": selected_nodes[i], "hash": hashes[i]}
+
+    if len(manifest) < n:
+        raise HTTPException(status_code=500, detail="Some chunks failed to upload")
 
     # Broadcast upload event to WebSocket terminal
     broadcast(f"\n[UPLOAD] {filename} // {n} fragments // k={k} // zone dist: {', '.join(selected_nodes)}\n")
@@ -213,16 +223,25 @@ async def download_file(filename: str, background_tasks: BackgroundTasks):
     retrieved = {}
     missing = []
 
+    idx_list = []
+    task_list = []
+    meta_list = []
     for idx, meta in manifest.items():
         url = meta["node"]
         if not CLUSTER_TOPOLOGY.get(url, {}).get("active"):
-            missing.append(int(idx)); continue
-        try:
-            resp = await http_client.get(f"{url}/download/{file_id}_{version_id}_{idx}", timeout=5.0)
-            if resp.status_code == 200 and get_hash(resp.content) == meta["hash"]:
-                retrieved[int(idx)] = resp.content
-            else: missing.append(int(idx))
-        except Exception: missing.append(int(idx))
+            missing.append(int(idx))
+        else:
+            idx_list.append(int(idx))
+            task_list.append(http_client.get(f"{url}/download/{file_id}_{version_id}_{idx}", timeout=30.0))
+            meta_list.append(meta)
+
+    if task_list:
+        results = await asyncio.gather(*task_list, return_exceptions=True)
+        for i, r in enumerate(results):
+            if isinstance(r, Exception) or r.status_code != 200 or get_hash(r.content) != meta_list[i]["hash"]:
+                missing.append(idx_list[i])
+            else:
+                retrieved[idx_list[i]] = r.content
 
     if len(retrieved) < k:
         raise HTTPException(status_code=500, detail="Not enough valid fragments to reconstruct file.")
@@ -233,23 +252,71 @@ async def download_file(filename: str, background_tasks: BackgroundTasks):
     if missing:
         async def heal_worker():
             broadcast(f"\n[REPAIR] Healing {filename} // missing chunks: {missing}\n")
-            frags, _ = rs.encode(data, k, n)
-            active_nodes = [u for u, i in CLUSTER_TOPOLOGY.items() if i["active"]]
-            for i in missing:
-                if not active_nodes: break
-                node = random.choice(active_nodes)
-                cid = f"{file_id}_{version_id}_{i}"
-                try:
-                    await http_client.post(f"{node}/upload/{cid}", files={'file': (cid, frags[i])})
-                    manifest[str(i)] = {"node": node, "hash": get_hash(frags[i])}
-                except Exception: pass
-            conn = sqlite3.connect(DB_FILE)
-            conn.execute('UPDATE files SET manifest = ? WHERE filename = ?', (json.dumps(manifest), filename))
-            conn.commit(); conn.close()
-            broadcast(f"[REPAIR] {filename} healed successfully.\n")
+            await repair_file(filename, missing, data)
         background_tasks.add_task(heal_worker)
 
     return StreamingResponse(io.BytesIO(data), media_type="application/octet-stream", headers={"Content-Disposition": f"attachment; filename={os.path.basename(filename)}"})
+
+async def repair_file(filename: str, missing: list, data: bytes = None):
+    conn = sqlite3.connect(DB_FILE)
+    row = conn.execute('SELECT file_id, version_id, original_size, padding_len, k, n, manifest FROM files WHERE filename = ?', (filename,)).fetchone()
+    if not row:
+        conn.close()
+        return
+    file_id, version_id, size, pad, k, n, manifest_str = row
+    manifest = json.loads(manifest_str)
+    conn.close()
+
+    if data is None:
+        retrieved = {}
+        idx_list = []
+        task_list = []
+        meta_list = []
+        for idx, meta in manifest.items():
+            url = meta["node"]
+            if not CLUSTER_TOPOLOGY.get(url, {}).get("active"):
+                continue
+            idx_int = int(idx)
+            idx_list.append(idx_int)
+            task_list.append(http_client.get(f"{url}/download/{file_id}_{version_id}_{idx}", timeout=30.0))
+            meta_list.append(meta)
+
+        if not task_list:
+            return
+
+        results = await asyncio.gather(*task_list, return_exceptions=True)
+        for i, r in enumerate(results):
+            if isinstance(r, Exception) or r.status_code != 200 or get_hash(r.content) != meta_list[i]["hash"]:
+                continue
+            retrieved[idx_list[i]] = r.content
+
+        if len(retrieved) < k:
+            return
+
+        rs = ReedSolomon()
+        data = rs.decode(retrieved, k, n, size, pad)
+
+    rs = ReedSolomon()
+    frags, _ = rs.encode(data, k, n)
+
+    active_nodes = [u for u, i in CLUSTER_TOPOLOGY.items() if i["active"]]
+    random.shuffle(active_nodes)
+    node_idx = 0
+    for i in missing:
+        if not active_nodes: break
+        node = active_nodes[node_idx % len(active_nodes)]
+        node_idx += 1
+        cid = f"{file_id}_{version_id}_{i}"
+        try:
+            await http_client.post(f"{node}/upload/{cid}", files={'file': (cid, frags[i])})
+            manifest[str(i)] = {"node": node, "hash": get_hash(frags[i])}
+        except Exception:
+            pass
+
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute('UPDATE files SET manifest = ? WHERE filename = ?', (json.dumps(manifest), filename))
+    conn.commit(); conn.close()
+    broadcast(f"[REPAIR] {filename} healed successfully.\n")
 
 @app.delete("/delete/{filename:path}")
 async def delete_file(filename: str):
@@ -264,7 +331,7 @@ async def delete_file(filename: str):
     count = conn.execute('SELECT COUNT(*) FROM files WHERE content_hash = ?', (chash,)).fetchone()[0]
     if count == 1:
         for idx, meta in json.loads(m_str).items():
-            try: await http_client.delete(f"{meta['node']}/delete/{fid}_{vid}_{idx}")
+            try: await http_client.delete(f"{meta['node']}/delete/{fid}_{vid}_{idx}", timeout=10.0)
             except Exception: pass
     conn.execute('DELETE FROM files WHERE filename = ?', (filename,))
     conn.commit(); conn.close()
@@ -321,12 +388,39 @@ class TopologyToggleRequest(BaseModel):
     node_url: str
 
 @app.post("/admin/topology/toggle")
-async def toggle_node(req: TopologyToggleRequest):
+async def toggle_node(req: TopologyToggleRequest, background_tasks: BackgroundTasks):
     if req.node_url in CLUSTER_TOPOLOGY:
-        CLUSTER_TOPOLOGY[req.node_url]["active"] = not CLUSTER_TOPOLOGY[req.node_url]["active"]
+        was_active = CLUSTER_TOPOLOGY[req.node_url]["active"]
+        CLUSTER_TOPOLOGY[req.node_url]["active"] = not was_active
         new_state = CLUSTER_TOPOLOGY[req.node_url]["active"]
         status = "ONLINE" if new_state else "OFFLINE"
         broadcast(f"\n[TOPOLOGY] {req.node_url} -> {status}\n")
+
+        if new_state and not was_active:
+            async def audit_node_chunks():
+                await asyncio.sleep(1)
+                broadcast(f"\n[AUDIT] Verifying chunks on {req.node_url}...\n")
+                conn = sqlite3.connect(DB_FILE)
+                rows = conn.execute('SELECT filename, file_id, version_id, manifest FROM files').fetchall()
+                conn.close()
+                for fname, fid, vid, m_str in rows:
+                    manifest = json.loads(m_str)
+                    missing_chunks = []
+                    for idx, meta in manifest.items():
+                        if meta["node"] == req.node_url:
+                            cid = f"{fid}_{vid}_{idx}"
+                            try:
+                                resp = await http_client.get(f"{req.node_url}/download/{cid}", timeout=5.0)
+                                if resp.status_code != 200:
+                                    missing_chunks.append(int(idx))
+                            except Exception:
+                                missing_chunks.append(int(idx))
+                    if missing_chunks:
+                        broadcast(f"\n[AUDIT] {fname} missing chunks {missing_chunks} on {req.node_url}, triggering repair...\n")
+                        await repair_file(fname, missing_chunks, None)
+                broadcast(f"\n[AUDIT] Chunk audit complete for {req.node_url}\n")
+            background_tasks.add_task(audit_node_chunks)
+
         return {"active": CLUSTER_TOPOLOGY[req.node_url]["active"]}
     raise HTTPException(status_code=404)
 

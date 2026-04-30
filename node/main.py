@@ -61,7 +61,7 @@ async def delete_chunk(file_id: str):
 async def corrupt_chunk(file_id: str):
     """
     ADMIN ENDPOINT: Intentionally ruins a file to test the Integrity Layer.
-    Appends the word "CORRUPTED" to the middle of the binary file.
+    Appends the word "CORRUPTION" to the middle of the binary file.
     """
     file_path = os.path.join(DATA_DIR, file_id)
     if not os.path.exists(file_path):
@@ -71,3 +71,12 @@ async def corrupt_chunk(file_id: str):
         f.write("HACKER_CORRUPTION")
         
     return {"message": f"File {file_id} has been intentionally corrupted."}
+
+@app.get("/list")
+async def list_chunks():
+    chunks = []
+    if os.path.exists(DATA_DIR):
+        for f in os.listdir(DATA_DIR):
+            if os.path.isfile(os.path.join(DATA_DIR, f)):
+                chunks.append(f)
+    return {"chunks": chunks}
