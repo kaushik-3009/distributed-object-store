@@ -6,203 +6,311 @@
     <title>SecStore Distributed Vault</title>
     <style>
         :root {
-            --primary: #4F46E5;
-            --primary-dark: #4338CA;
-            --danger: #EF4444;
-            --danger-dark: #DC2626;
-            --success: #10B981;
-            --bg-color: #F9FAFB;
-            --card-bg: #FFFFFF;
-            --text-main: #111827;
-            --text-muted: #6B7280;
-            --border: #E5E7EB;
+            --black: #000000;
+            --white: #FFFFFF;
+            --green: #00FF00;
+            --gray-warm: #9D968E;
+            --gray-med: #666666;
+            --near-black: #1A1A1A;
+            --font-mono: "Courier New", Courier, monospace;
+            --font-sans: Arial, Helvetica, sans-serif;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
+            background-color: var(--white);
+            color: var(--black);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 19.5px;
             margin: 0;
-            padding: 2rem;
+            padding: 0;
+        }
+
+        h1 { font-size: 24px; font-weight: 700; line-height: 36px; margin-top: 0; margin-bottom: 12px; }
+        h2 { font-size: 14.4px; font-weight: 700; line-height: 21.6px; margin-top: 0; margin-bottom: 16px; text-transform: uppercase; border-bottom: 1px solid var(--black); padding-bottom: 8px;}
+        h3 { font-size: 12px; font-weight: 700; line-height: 18px; margin-top: 0;}
+
+        .app-layout {
             display: flex;
             flex-direction: column;
+            min-height: 100vh;
+        }
+        @media (min-width: 1025px) {
+            .app-layout {
+                flex-direction: row;
+            }
+        }
+
+        .sidebar {
+            background-color: var(--white);
+            border-bottom: 1px solid var(--black);
+            width: 100%;
+        }
+        @media (min-width: 1025px) {
+            .sidebar {
+                border-bottom: none;
+                border-right: 1px solid var(--black);
+                width: 230px;
+                flex-shrink: 0;
+            }
+        }
+
+        .nav-item {
+            background-color: transparent;
+            color: var(--black);
+            font-size: 12px;
+            font-weight: 400;
+            padding: 14px;
+            border: 1px solid transparent;
+            height: 48px;
+            display: flex;
             align-items: center;
-        }
-
-        h1 { margin-bottom: 0.5rem; color: var(--text-main); }
-        p.subtitle { color: var(--text-muted); margin-top: 0; margin-bottom: 2rem; }
-
-        .container {
-            max-width: 1000px;
-            width: 100%;
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 1.5rem;
-        }
-
-        @media (min-width: 768px) {
-            .container { grid-template-columns: 1fr 2fr; }
-        }
-
-        .full-width {
-            grid-column: 1 / -1;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .card-header { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-
-        input[type="text"], input[type="file"], input[type="number"] {
-            width: 100%;
-            padding: 0.75rem;
-            margin-bottom: 1rem;
-            border: 1px solid var(--border);
-            border-radius: 4px;
+            cursor: pointer;
+            transition: all 100ms ease-in-out;
+            text-decoration: none;
             box-sizing: border-box;
         }
+        .nav-item:hover { background-color: #F5F5F5; border: 1px solid var(--black); }
+        .nav-item:active { background-color: var(--black); color: var(--white); border: 1px solid var(--black); }
 
-        button {
-            background-color: var(--primary);
-            color: white;
-            padding: 0.75rem 1rem;
-            border: none;
-            border-radius: 4px;
+        .main-content {
+            flex-grow: 1;
+            padding: 24px;
+            width: 100%;
+            max-width: 1200px;
+            box-sizing: border-box;
+            margin: 0 auto;
+        }
+        @media (min-width: 1025px) {
+            .main-content {
+                padding: 48px;
+                margin: 0;
+            }
+        }
+
+        .objective-box {
+            background-color: var(--white);
+            border: 2px solid var(--black);
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .data-card {
+            background-color: var(--white);
+            border: 1px solid var(--black);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 12px;}
+        .caption { color: var(--gray-med); font-size: 11px; font-weight: 400; display: block; margin-top: 4px; }
+
+        input[type="text"], input[type="file"], input[type="number"] {
+            background-color: var(--white);
+            color: var(--black);
+            font-size: 13.3333px;
+            font-family: var(--font-sans);
+            padding: 12px;
+            border: 1px solid var(--black);
+            border-radius: 0px;
+            height: 40px;
+            width: 100%;
+            box-sizing: border-box;
+            transition: border-color 100ms ease-in-out;
+        }
+        input[type="text"]:focus, input[type="number"]:focus {
+            border-color: var(--near-black);
+            box-shadow: inset 0px 0px 0px 2px rgba(0, 0, 0, 0.1);
+            outline: none;
+        }
+        input:disabled {
+            background-color: #F5F5F5; color: var(--gray-warm); border-color: var(--gray-med); cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background-color: var(--black);
+            color: var(--white);
+            font-size: 13.2px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            padding: 18px;
+            border: 2px solid var(--black);
+            border-radius: 0px;
+            height: 58px;
+            width: 100%;
+            max-width: 257px;
             cursor: pointer;
-            font-weight: 600;
+            transition: all 150ms ease-in-out;
+            text-transform: uppercase;
+        }
+        .btn-primary:hover { background-color: var(--near-black); border-color: var(--near-black); }
+        .btn-primary:active { transform: translate(0px, 2px); box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.5); }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: var(--black);
+            font-size: 13.2px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            padding: 18px;
+            border: 2px solid var(--black);
+            border-radius: 0px;
+            height: 58px;
             width: 100%;
-            transition: background-color 0.2s;
+            max-width: 257px;
+            cursor: pointer;
+            transition: all 150ms ease-in-out;
+            text-transform: uppercase;
         }
+        .btn-secondary:hover { background-color: var(--black); color: var(--white); }
+        .btn-secondary:active { transform: translate(0px, 2px); border-color: var(--near-black); }
 
-        button:hover { background-color: var(--primary-dark); }
-        button.btn-danger { background-color: var(--danger); margin-top: 0.5rem; }
-        button.btn-danger:hover { background-color: var(--danger-dark); }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; border: 1px solid var(--black); }
+        th, td { padding: 12px; border: 1px solid var(--black); text-align: left; }
+        th { font-weight: 700; font-size: 12px; }
+        td { font-size: 13px; }
+        .action-buttons { display: flex; gap: 8px; }
+        .action-buttons button { height: 40px; padding: 0 16px; width: auto; font-size: 12px;}
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-        }
-        
-        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-muted); font-size: 0.875rem; text-transform: uppercase; }
-        
-        .action-buttons {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .action-buttons button { padding: 0.25rem 0.5rem; font-size: 0.875rem; width: auto; }
-        
-        /* Loading Overlay */
-        #loader {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); color: white; justify-content: center; align-items: center; z-index: 1000;
-        }
-
-        /* Topology Grid */
         .topology-grid {
             display: grid;
-            gap: 1rem;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         }
-
         .node-card {
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 1rem;
+            border: 1px solid var(--black);
+            padding: 16px;
+            background: var(--white);
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
-            background: #fff;
+            gap: 12px;
+        }
+        
+        .badge-success {
+            background-color: var(--green);
+            color: var(--black);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 8px;
+            border: 1px solid var(--green);
+            display: inline-block;
+        }
+        .badge-inactive {
+            background-color: transparent;
+            color: var(--gray-med);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 8px;
+            border: 1px solid var(--black);
+            display: inline-block;
         }
 
-        .node-status {
-            font-weight: bold;
-            font-size: 0.8rem;
+        #loader {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); color: var(--green); justify-content: center; align-items: center; z-index: 1000;
         }
-
-        .status-active { color: var(--success); }
-        .status-inactive { color: var(--danger); }
+        #loader h2 { border: none; color: var(--green); font-size: 24px; }
     </style>
 </head>
 <body>
 
-    <div id="loader"><h2>Processing Request...</h2></div>
+    <div id="loader"><h2>PROCESSING_REQUEST...</h2></div>
 
-    <h1>SecStore Distributed Vault</h1>
-    <p class="subtitle">Erasure-Coded Object Store with Integrity Guarantees</p>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div style="padding: 24px 14px; border-bottom: 1px solid var(--black);">
+                <h1 style="font-size: 16px; margin: 0; text-transform: uppercase;">SecStore.Sys</h1>
+                <p style="font-size: 11px; color: var(--gray-med); margin: 4px 0 0 0;">DISTRIBUTED_OBJECT_STORE</p>
+            </div>
+            <nav>
+                <a href="#how-it-works" class="nav-item">SYSTEM.MATH</a>
+                <a href="#upload" class="nav-item">IO.UPLOAD_NODE</a>
+                <a href="#vault" class="nav-item">VAULT.INDEX</a>
+                <a href="#topology" class="nav-item">NET.TOPOLOGY</a>
+            </nav>
+        </aside>
 
-    <div class="container">
-        <!-- Explainer Banner -->
-        <div class="card full-width" style="background: #EEF2FF; border-color: var(--primary); padding: 1rem 1.5rem;">
-            <h3 style="margin-top: 0; color: var(--primary-dark); font-size: 1.1rem;">How the Math Works</h3>
-            <p style="font-size: 0.9rem; margin-bottom: 0;">
-                Files are never stored whole. They are split into chunks using <strong>Galois Field matrix multiplication</strong>. 
-                <br><strong>k</strong> = The exact number of chunks needed to rebuild the file. 
-                <br><strong>n</strong> = The total number of chunks distributed across the cluster.
-                <br><em>Example:</em> If you upload with <strong>k=2, n=5</strong>, your file is split into 5 pieces. You can suffer <strong>3 simultaneous server crashes</strong> (5 - 2) and still flawlessly recover your data.
-            </p>
-        </div>
+        <main class="main-content">
+            <h1>DISTRIBUTED OBJECT STORE</h1>
+            <p style="color: var(--gray-med); font-weight: 700; margin-bottom: 36px; margin-top: 0;">INTEGRITY GUARANTEED. FAULT-TOLERANT.</p>
 
-        <!-- Upload Section -->
-        <div class="card">
-            <div class="card-header">Upload File</div>
-            <form id="uploadForm">
-                <label style="font-size: 0.875rem; color: var(--text-muted);">Select Local File:</label>
-                <input type="file" id="fileInput" required>
+            <!-- Explainer Banner -->
+            <div id="how-it-works" class="objective-box">
+                <h2 style="border-bottom: none; margin-bottom: 8px;">SYSTEM MATH // GALOIS FIELD MULTIPLICATION</h2>
+                <p style="margin-top: 0; margin-bottom: 0;">
+                    Files are not stored whole. They are split into fragments using <strong>Galois Field matrix operations</strong>.
+                    <br><br>
+                    <strong>k</strong> = The exact number of chunks needed to rebuild the file.<br>
+                    <strong>n</strong> = The total number of chunks distributed across the cluster.<br>
+                    <em>Example:</em> If you upload with <strong>k=2, n=5</strong>, your file is split into 5 pieces. You can suffer <strong>3 simultaneous server crashes</strong> (5 - 2) and still flawlessly recover your data.
+                </p>
+            </div>
+
+            <!-- Upload Section -->
+            <div id="upload" class="data-card">
+                <h2>IO.UPLOAD_NODE</h2>
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label>SELECT_LOCAL_FILE:</label>
+                        <input type="file" id="fileInput" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>VIRTUAL_PATH: <span class="caption">Auto-filled, but entirely editable.</span></label>
+                        <input type="text" id="virtualPath" placeholder="my_file.txt" required>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="form-group">
+                            <label>DATA_FRAGMENTS (k): <span class="caption">Minimum nodes required to rebuild.</span></label>
+                            <input type="number" id="kInput" value="2" min="1" max="10" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>TOTAL_FRAGMENTS (n): <span class="caption">Total pieces generated across network.</span></label>
+                            <input type="number" id="nInput" value="3" min="2" max="15" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" style="margin-top: 12px;">EXECUTE.UPLOAD()</button>
+                </form>
+            </div>
+
+            <!-- File List Section -->
+            <div id="vault" class="data-card">
+                <h2>VAULT.INDEX</h2>
+                <button onclick="fetchFiles()" class="btn-secondary" style="height: 40px; padding: 0 16px; width: auto; margin-bottom: 8px;">REFRESH_INDEX</button>
                 
-                <label style="font-size: 0.875rem; color: var(--text-muted);">Virtual Path (auto-filled, editable):</label>
-                <input type="text" id="virtualPath" placeholder="my_file.txt" required>
-                
-                <label style="font-size: 0.875rem; color: var(--text-muted);">Data Fragments (k) <span style="font-size: 0.75rem; color: var(--primary); cursor: help;" title="Minimum number of nodes required to piece the file back together. Higher k = better space efficiency, but lower fault tolerance.">(?)</span>:</label>
-                <input type="number" id="kInput" value="2" min="1" max="10" required>
-                
-                <label style="font-size: 0.875rem; color: var(--text-muted);">Total Fragments (n) <span style="font-size: 0.75rem; color: var(--primary); cursor: help;" title="Total number of nodes the file will be split across. n minus k is how many nodes can crash without losing data.">(?)</span>:</label>
-                <input type="number" id="nInput" value="3" min="2" max="15" required>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>FILENAME</th>
+                                <th>SIZE</th>
+                                <th>k</th>
+                                <th>n</th>
+                                <th>ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fileTableBody">
+                            <!-- Data populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-                <button type="submit">Upload & Encode</button>
-            </form>
-        </div>
-
-        <!-- File List Section -->
-        <div class="card">
-            <div class="card-header">Vault Contents</div>
-            <button onclick="fetchFiles()" style="margin-bottom: 1rem; background-color: var(--text-muted); width: auto;">Refresh List</button>
-            
-            <table>
-                <thead>
-                    <tr>
-                        <th>Filename</th>
-                        <th>Size</th>
-                        <th>k</th>
-                        <th>n</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="fileTableBody">
-                    <!-- Data populated by JS -->
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Cluster Topology Section -->
-        <div class="card full-width">
-            <div class="card-header">
-                Cluster Topology
-                <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted); display: block; margin-top: 0.25rem;">
+            <!-- Cluster Topology Section -->
+            <div id="topology" class="data-card">
+                <h2>NET.TOPOLOGY</h2>
+                <p class="caption" style="margin-bottom: 24px; font-size: 12px; line-height: 18px;">
                     Simulate catastrophic server crashes by toggling power off. As long as at least <strong>k</strong> nodes survive, the Read-Repair engine will instantly reconstruct the file on download and magically revive the missing chunks onto healthy nodes in the background!
-                </span>
+                </p>
+                <div id="topologyContainer" class="topology-grid">
+                    <!-- Data populated by JS -->
+                </div>
             </div>
-            <div id="topologyContainer" class="topology-grid">
-                <!-- Data populated by JS -->
-            </div>
-        </div>
+        </main>
     </div>
 
     <script>
@@ -221,7 +329,7 @@
                 tbody.innerHTML = '';
 
                 if(files.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: gray;">No files in the vault.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--gray-med);">[ SYSTEM.VAULT IS EMPTY ]</td></tr>';
                     return;
                 }
 
@@ -230,12 +338,12 @@
                     const sizeKB = (file.size_bytes / 1024).toFixed(2);
                     
                     tr.innerHTML = `
-                        <td style="font-family: monospace; font-size: 0.9rem;">${file.filename}</td>
+                        <td style="word-break: break-all; font-weight: 700;">${file.filename}</td>
                         <td>${sizeKB} KB</td>
                         <td>${file.k !== undefined ? file.k : '-'}</td>
                         <td>${file.n !== undefined ? file.n : '-'}</td>
                         <td class="action-buttons">
-                            <button onclick="downloadFile('${file.filename}')">Download</button>
+                            <button class="btn-secondary" onclick="downloadFile('${file.filename}')">DOWNLOAD</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -245,6 +353,14 @@
                 alert("Failed to connect to the Coordinator.");
             }
         }
+
+        // Auto-fill virtual path
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const virtualPathInput = document.getElementById('virtualPath');
+            if (this.files.length > 0 && !virtualPathInput.value) {
+                virtualPathInput.value = this.files[0].name;
+            }
+        });
 
         // Upload a file
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
@@ -270,7 +386,7 @@
                 });
 
                 if (response.ok) {
-                    alert('File successfully encoded and distributed!');
+                    alert('UPLOAD SUCCESS. FILE SECURED.');
                     fileInput.value = '';
                     document.getElementById('virtualPath').value = '';
                     document.getElementById('kInput').value = '2';
@@ -278,20 +394,12 @@
                     fetchFiles();
                 } else {
                     const error = await response.json();
-                    alert(`Upload failed: ${JSON.stringify(error)}`);
+                    alert(`UPLOAD_FAILED: ${JSON.stringify(error)}`);
                 }
             } catch (err) {
-                alert(`Error: ${err.message}`);
+                alert(`SYS_ERROR: ${err.message}`);
             } finally {
                 hideLoader();
-            }
-        });
-
-        // Auto-fill virtual path
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            const virtualPathInput = document.getElementById('virtualPath');
-            if (this.files.length > 0 && !virtualPathInput.value) {
-                virtualPathInput.value = this.files[0].name;
             }
         });
 
@@ -303,7 +411,6 @@
                 const response = await fetch(url);
                 
                 if (response.ok) {
-                    // Convert stream to Blob and trigger standard browser download
                     const blob = await response.blob();
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -315,32 +422,10 @@
                     window.URL.revokeObjectURL(downloadUrl);
                 } else {
                     const errorData = await response.json();
-                    alert(`Download failed: ${errorData.detail || 'Unknown Error'}\n\nDid you turn off too many nodes?`);
+                    alert(`DOWNLOAD_FAILED: ${errorData.detail || 'Unknown Error'}\n\nDid you turn off too many nodes?`);
                 }
             } catch(e) {
-                alert(`Network error during download: ${e.message}`);
-            } finally {
-                hideLoader();
-            }
-        }
-
-        // Simulate an attack
-        async function attackNode(nodeId, filename) {
-            if(!confirm(`WARNING: This will intentionally corrupt Node ${nodeId}'s chunk for ${filename}. Proceed?`)) return;
-            
-            showLoader();
-            try {
-                const url = `${API_BASE}/admin/corrupt/${nodeId}/${encodeURIComponent(filename)}`;
-                const response = await fetch(url, { method: 'POST' });
-                
-                if (response.ok) {
-                    alert(`ATTACK SUCCESSFUL! Node ${nodeId}'s fragment for ${filename} is now ruined.\n\nTry downloading the file now to see the Integrity Layer save it!`);
-                } else {
-                    const error = await response.json();
-                    alert(`Attack failed: ${JSON.stringify(error)}`);
-                }
-            } catch (err) {
-                alert(`Error: ${err.message}`);
+                alert(`NETWORK_ERROR: ${e.message}`);
             } finally {
                 hideLoader();
             }
@@ -359,13 +444,14 @@
                     const div = document.createElement('div');
                     div.className = 'node-card';
                     
-                    const statusClass = isActive ? 'status-active' : 'status-inactive';
-                    const statusText = isActive ? 'active' : 'inactive';
+                    const badgeHtml = isActive 
+                        ? `<span class="badge-success">STATUS: ACTIVE</span>`
+                        : `<span class="badge-inactive">STATUS: INACTIVE</span>`;
                     
                     div.innerHTML = `
-                        <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all;">${nodeUrl}</div>
-                        <div class="node-status ${statusClass}">${statusText}</div>
-                        <button onclick="toggleNodePower('${nodeUrl}')" style="margin-top: auto; padding: 0.5rem; font-size: 0.8rem; background-color: var(--text-muted);">Toggle Power</button>
+                        <div style="font-weight: 700; word-break: break-all; font-size: 14.4px;">${nodeUrl}</div>
+                        <div>${badgeHtml}</div>
+                        <button class="btn-secondary" onclick="toggleNodePower('${nodeUrl}')" style="margin-top: auto; height: 40px; padding: 0 16px; width: 100%;">TOGGLE_POWER</button>
                     `;
                     container.appendChild(div);
                 }
@@ -384,7 +470,7 @@
                 });
                 await fetchTopology();
             } catch (e) {
-                alert("Failed to toggle node power.");
+                alert("CMD_FAILED: Cannot toggle node power.");
             } finally {
                 hideLoader();
             }
