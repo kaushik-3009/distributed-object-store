@@ -16,6 +16,7 @@ services:
     - 8001:8000
     environment:
     - NODE_ID=node1
+    - NODE_ZONE=us-east-1a
     volumes:
     - ./node:/app
   node2:
@@ -25,6 +26,7 @@ services:
     - 8002:8000
     environment:
     - NODE_ID=node2
+    - NODE_ZONE=us-east-1b
     volumes:
     - ./node:/app
   node3:
@@ -34,5 +36,6 @@ services:
     - 8003:8000
     environment:
     - NODE_ID=node3
+    - NODE_ZONE=us-east-1c
     volumes:
     - ./node:/app

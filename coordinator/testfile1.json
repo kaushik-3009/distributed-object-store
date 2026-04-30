@@ -1,0 +1,22 @@
+{
+  "cluster_id": "sec-dist-prod-001",
+  "created": "2026-04-30T00:00:00Z",
+  "nodes": [
+    {"id": "node1", "zone": "us-east-1a", "capacity_gb": 100, "status": "active"},
+    {"id": "node2", "zone": "us-east-1b", "capacity_gb": 100, "status": "active"},
+    {"id": "node3", "zone": "us-east-1c", "capacity_gb": 100, "status": "active"}
+  ],
+  "config": {
+    "k": 2,
+    "n": 3,
+    "encoding": "reed-solomon-gf28",
+    "dedup_enabled": true,
+    "read_repair_enabled": true,
+    "max_file_size_mb": 20
+  },
+  "stats": {
+    "total_files_stored": 0,
+    "total_bytes_stored": 0,
+    "dedup_savings_bytes": 0
+  }
+}

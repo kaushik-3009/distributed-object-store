@@ -11,7 +11,8 @@ os.makedirs(DATA_DIR, exist_ok=True)
 @app.get("/health")
 def health_check():
     node_id = os.getenv("NODE_ID", "unknown_node")
-    return {"status": "ok", "service": f"storage-node-{node_id}"}
+    zone = os.getenv("NODE_ZONE", "default-zone")
+    return {"status": "ok", "service": f"storage-node-{node_id}", "zone": zone}
 
 @app.post("/upload/{file_id}")
 async def upload_chunk(file_id: str, file: UploadFile = File(...)):

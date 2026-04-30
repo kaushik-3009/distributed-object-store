@@ -1,0 +1,32 @@
+{
+  "test_scenario": "fault_tolerance_verification",
+  "version": "1.0",
+  "test_cases": [
+    {
+      "id": "tc_001",
+      "name": "Single Node Failure",
+      "description": "Verify file reconstruction when 1 of 3 nodes fails",
+      "k": 2,
+      "n": 3,
+      "expected_outcome": "SUCCESS - File reconstructable from any 2 of 3 fragments"
+    },
+    {
+      "id": "tc_002", 
+      "name": "Dual Node Failure",
+      "description": "Verify system correctly fails when 2 of 3 nodes fail",
+      "k": 2,
+      "n": 3,
+      "expected_outcome": "FAILURE - Insufficient fragments for reconstruction"
+    },
+    {
+      "id": "tc_003",
+      "name": "Deduplication Check",
+      "description": "Verify second upload of same content is deduplicated",
+      "k": 2,
+      "n": 3,
+      "expected_outcome": "SUCCESS - Second file upload instant, no new fragments created"
+    }
+  ],
+  "generated": "2026-04-30",
+  "author": "SecStore System"
+}

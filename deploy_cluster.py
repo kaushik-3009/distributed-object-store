@@ -16,11 +16,17 @@ def generate_compose(num_nodes):
         }
     }
 
+    zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+    
     for i in range(1, num_nodes + 1):
+        zone = zones[(i - 1) % len(zones)]
         compose["services"][f"node{i}"] = {
             "build": {"context": "./node"},
             "ports": [f"{8000 + i}:8000"],
-            "environment": [f"NODE_ID=node{i}"],
+            "environment": [
+                f"NODE_ID=node{i}",
+                f"NODE_ZONE={zone}"
+            ],
             "volumes": ["./node:/app"]
         }
 
