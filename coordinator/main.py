@@ -1,37 +1,59 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse
-import httpx
 import os
-import uuid
-import sqlite3
 import io
+import uuid
+import json
+import sqlite3
 import hashlib
-from erasure_coding import ReedSolomon
-from fastapi.staticfiles import StaticFiles
+import random
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Coordinator Service")
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+import httpx
+from pydantic import BaseModel
+
+from erasure_coding import ReedSolomon
+
+# 1. Setup Global HTTP Client and Topology
+http_client: httpx.AsyncClient = None
+
+RAW_NODE_URLS = os.getenv(
+    "NODE_URLS",
+    "http://node1:8000,http://node2:8000,http://node3:8000,http://node4:8000,http://node5:8000"
+).split(",")
+
+CLUSTER_TOPOLOGY = {url: True for url in RAW_NODE_URLS}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global http_client
+    http_client = httpx.AsyncClient()
+    yield
+    await http_client.aclose()
+
+app = FastAPI(title="Coordinator Service", lifespan=lifespan)
 
 # Mount the static directory to serve our web UI
 app.mount("/ui", StaticFiles(directory="/app/static", html=True), name="static")
 
-NODE_URLS = os.getenv("NODE_URLS", "http://node1:8000,http://node2:8000,http://node3:8000").split(",")
 DB_FILE = "/app/coordinator.db"
-rs = ReedSolomon(k=2, n=3)
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    # We added hash columns to store the cryptographic fingerprints
+    # Recreate the table schema
+    cursor.execute('DROP TABLE IF EXISTS files')
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS files (
+        CREATE TABLE files (
             filename TEXT PRIMARY KEY,
             file_id TEXT NOT NULL,
             version_id TEXT NOT NULL,
             original_size INTEGER NOT NULL,
             padding_len INTEGER NOT NULL,
-            hash_0 TEXT NOT NULL,
-            hash_1 TEXT NOT NULL,
-            hash_2 TEXT NOT NULL
+            k INTEGER NOT NULL,
+            n INTEGER NOT NULL,
+            manifest TEXT NOT NULL
         )
     ''')
     conn.commit()
@@ -44,34 +66,48 @@ def get_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 @app.post("/upload/")
-async def upload_file(file: UploadFile = File(...), custom_filename: str = None):
-    # If a custom filename (like /photos/cat.jpg) is provided, use that.
+async def upload_file(
+    file: UploadFile = File(...), 
+    custom_filename: str = Form(None), 
+    k: int = Form(2), 
+    n: int = Form(3)
+):
     filename = custom_filename if custom_filename else file.filename
     file_bytes = await file.read()
     original_size = len(file_bytes)
     
-    fragments, padding_len = rs.encode(file_bytes)
+    rs = ReedSolomon()
+    fragments, padding_len = rs.encode(file_bytes, k, n)
     file_id = str(uuid.uuid4())
-    version_id = str(uuid.uuid4()) # To prevent mix-and-match attacks
+    version_id = str(uuid.uuid4())
     
-    # 1. HASHING: Take a fingerprint of each fragment
     hashes = [get_hash(f) for f in fragments]
     
-    # 2. DISTRIBUTE
-    async with httpx.AsyncClient() as client:
-        for i, fragment in enumerate(fragments):
-            node_url = NODE_URLS[i]
-            chunk_id = f"{file_id}_{version_id}_{i}"
-            files = {'file': (chunk_id, fragment)}
-            await client.post(f"{node_url}/upload/{chunk_id}", files=files, timeout=5.0)
+    healthy_nodes = [url for url, is_active in CLUSTER_TOPOLOGY.items() if is_active]
+    if len(healthy_nodes) < n:
+        raise HTTPException(status_code=500, detail="Not enough healthy nodes in cluster topology.")
+        
+    selected_nodes = random.sample(healthy_nodes, n)
+    manifest = {}
 
-    # 3. SECURE METADATA: Save the fingerprints securely in the database
+    for i, fragment in enumerate(fragments):
+        node_url = selected_nodes[i]
+        chunk_id = f"{file_id}_{version_id}_{i}"
+        files = {'file': (chunk_id, fragment)}
+        
+        try:
+            await http_client.post(f"{node_url}/upload/{chunk_id}", files=files, timeout=5.0)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload to node {node_url}: {e}")
+            
+        manifest[str(i)] = {"node": node_url, "hash": hashes[i]}
+
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute('''
-        REPLACE INTO files (filename, file_id, version_id, original_size, padding_len, hash_0, hash_1, hash_2) 
+        REPLACE INTO files (filename, file_id, version_id, original_size, padding_len, k, n, manifest) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (filename, file_id, version_id, original_size, padding_len, hashes[0], hashes[1], hashes[2]))
+    ''', (filename, file_id, version_id, original_size, padding_len, k, n, json.dumps(manifest)))
     conn.commit()
     conn.close()
 
@@ -79,95 +115,171 @@ async def upload_file(file: UploadFile = File(...), custom_filename: str = None)
 
 @app.get("/list/")
 async def list_files(prefix: str = ""):
-    """Lists all files, optionally filtering by a directory prefix."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute('SELECT filename, original_size FROM files WHERE filename LIKE ?', (f"{prefix}%",))
+    cursor.execute('SELECT filename, original_size, k, n FROM files WHERE filename LIKE ?', (f"{prefix}%",))
     rows = cursor.fetchall()
     conn.close()
-    return [{"filename": row[0], "size_bytes": row[1]} for row in rows]
+    return [{"filename": row[0], "size_bytes": row[1], "k": row[2], "n": row[3]} for row in rows]
+
+async def heal_file(filename: str, reconstructed_data: bytes, k: int, n: int, file_id: str, version_id: str, manifest: dict, missing_indices: list):
+    """Background task to heal missing or corrupted fragments."""
+    try:
+        rs = ReedSolomon()
+        fragments, _ = rs.encode(reconstructed_data, k, n)
+        hashes = [get_hash(f) for f in fragments]
+        
+        active_nodes = [node for node, active in CLUSTER_TOPOLOGY.items() if active]
+        
+        for i in missing_indices:
+            if not active_nodes:
+                print("No active nodes available for healing.")
+                break
+                
+            new_node = random.choice(active_nodes)
+            chunk_id = f"{file_id}_{version_id}_{i}"
+            fragment = fragments[i]
+            
+            files = {'file': (chunk_id, fragment)}
+            try:
+                await http_client.post(f"{new_node}/upload/{chunk_id}", files=files, timeout=5.0)
+                manifest[str(i)] = {"node": new_node, "hash": hashes[i]}
+                print(f"Self-healed fragment {i} of {filename} on {new_node}")
+            except Exception as e:
+                print(f"Failed to heal fragment {i} on {new_node}: {e}")
+                
+        # Update manifest in database
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('UPDATE files SET manifest = ? WHERE filename = ?', (json.dumps(manifest), filename))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error during self-healing: {e}")
 
 @app.get("/download/{filename:path}")
-async def download_file(filename: str):
+async def download_file(filename: str, background_tasks: BackgroundTasks):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute('SELECT file_id, version_id, original_size, padding_len, hash_0, hash_1, hash_2 FROM files WHERE filename = ?', (filename,))
+    cursor.execute('SELECT file_id, version_id, original_size, padding_len, k, n, manifest FROM files WHERE filename = ?', (filename,))
     row = cursor.fetchone()
     conn.close()
 
     if not row:
         raise HTTPException(status_code=404, detail="File not found")
-    
-    file_id, version_id, original_size, padding_len = row[0:4]
-    expected_hashes = {0: row[4], 1: row[5], 2: row[6]}
+        
+    file_id, version_id, original_size, padding_len, k, n, manifest_str = row
+    manifest = json.loads(manifest_str)
     
     retrieved_fragments = {}
+    missing_indices = []
 
-    # 1. GATHER AND VERIFY: Download and check fingerprints
-    async with httpx.AsyncClient() as client:
-        for i, node_url in enumerate(NODE_URLS):
-            try:
-                chunk_id = f"{file_id}_{version_id}_{i}"
-                response = await client.get(f"{node_url}/download/{chunk_id}", timeout=2.0)
+    for idx_str, meta in manifest.items():
+        i = int(idx_str)
+        node_url = meta["node"]
+        expected_hash = meta["hash"]
+        
+        if not CLUSTER_TOPOLOGY.get(node_url, False):
+            print(f"Node {node_url} is inactive. Skipping chunk {i}.")
+            missing_indices.append(i)
+            continue
+            
+        chunk_id = f"{file_id}_{version_id}_{i}"
+        try:
+            response = await http_client.get(f"{node_url}/download/{chunk_id}", timeout=2.0)
+            if response.status_code == 200:
+                downloaded_data = response.content
+                downloaded_hash = get_hash(downloaded_data)
                 
-                if response.status_code == 200:
-                    downloaded_data = response.content
-                    downloaded_hash = get_hash(downloaded_data)
-                    
-                    # INTEGRITY CHECK: Does the downloaded chunk match our saved fingerprint?
-                    if downloaded_hash == expected_hashes[i]:
-                        retrieved_fragments[i] = downloaded_data
-                        print(f"Fragment {i} verified successfully.")
-                    else:
-                        print(f"WARNING: Fragment {i} from {node_url} failed integrity check! Discarding.")
-            except httpx.RequestError:
-                print(f"Node {node_url} unavailable.")
-                continue
+                if downloaded_hash == expected_hash:
+                    retrieved_fragments[i] = downloaded_data
+                else:
+                    print(f"Integrity check failed for fragment {i} from {node_url}")
+                    missing_indices.append(i)
+            else:
+                print(f"Failed to download fragment {i} from {node_url}")
+                missing_indices.append(i)
+        except httpx.RequestError:
+            print(f"Node {node_url} unavailable.")
+            missing_indices.append(i)
 
-    # 2. DECODE: We need at least 2 VERIFIED fragments to proceed
-    if len(retrieved_fragments) < 2:
-        raise HTTPException(status_code=500, detail="Not enough valid fragments to securely reconstruct file. Data may be lost or under attack.")
+    if len(retrieved_fragments) < k:
+        raise HTTPException(status_code=500, detail="Not enough valid fragments to reconstruct file.")
 
-    reconstructed_data = rs.decode(retrieved_fragments, original_size, padding_len)
+    rs = ReedSolomon()
+    reconstructed_data = rs.decode(retrieved_fragments, k, n, original_size, padding_len)
     
+    if missing_indices:
+        print(f"Triggering background self-healing for {filename}. Missing indices: {missing_indices}")
+        background_tasks.add_task(
+            heal_file, 
+            filename, 
+            reconstructed_data, 
+            k, 
+            n, 
+            file_id, 
+            version_id, 
+            manifest, 
+            missing_indices
+        )
+        
     return StreamingResponse(
         io.BytesIO(reconstructed_data), 
         media_type="application/octet-stream", 
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+class TopologyToggleRequest(BaseModel):
+    node_url: str
+
+@app.post("/admin/topology/toggle")
+async def toggle_topology(req: TopologyToggleRequest):
+    if req.node_url in CLUSTER_TOPOLOGY:
+        CLUSTER_TOPOLOGY[req.node_url] = not CLUSTER_TOPOLOGY[req.node_url]
+        return {"message": f"Toggled {req.node_url} to active={CLUSTER_TOPOLOGY[req.node_url]}"}
+    else:
+        raise HTTPException(status_code=404, detail="Node URL not found in topology")
+
+@app.get("/admin/topology")
+async def get_topology():
+    return CLUSTER_TOPOLOGY
+
 @app.post("/admin/corrupt/{node_id}/{filename:path}")
 async def corrupt_file(node_id: int, filename: str):
     """
     Demo/Admin Endpoint: Instructs a specific node to corrupt its chunk for this file.
-    This simulates bit-rot or a hacker modifying the file on the node's hard drive.
     """
-    if node_id not in [1, 2, 3]:
-        raise HTTPException(status_code=400, detail="Invalid node_id. Must be 1, 2, or 3.")
+    try:
+        node_url = RAW_NODE_URLS[node_id - 1]
+    except IndexError:
+        raise HTTPException(status_code=400, detail=f"Invalid node_id. Must be between 1 and {len(RAW_NODE_URLS)}.")
 
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute('SELECT file_id, version_id FROM files WHERE filename = ?', (filename,))
+    cursor.execute('SELECT file_id, version_id, manifest FROM files WHERE filename = ?', (filename,))
     row = cursor.fetchone()
     conn.close()
 
     if not row:
         raise HTTPException(status_code=404, detail="File not found")
+        
+    file_id, version_id, manifest_str = row
+    manifest = json.loads(manifest_str)
     
-    file_id, version_id = row
-    
-    # Calculate the internal chunk name based on our encoding logic.
-    # Node 1 gets chunk 0, Node 2 gets chunk 1, Node 3 gets chunk 2
-    chunk_index = node_id - 1
-    chunk_id = f"{file_id}_{version_id}_{chunk_index}"
-    node_url = NODE_URLS[chunk_index]
+    chunk_id = None
+    for idx_str, meta in manifest.items():
+        if meta["node"] == node_url:
+            chunk_id = f"{file_id}_{version_id}_{idx_str}"
+            break
+            
+    if not chunk_id:
+        raise HTTPException(status_code=404, detail=f"No chunk found on node {node_url} for file {filename}")
 
-    # Ask the specific node to corrupt its chunk
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(f"{node_url}/corrupt/{chunk_id}", timeout=2.0)
-            if response.status_code == 200:
-                return {"message": f"Successfully instructed Node {node_id} to corrupt chunk for '{filename}'"}
-            else:
-                raise HTTPException(status_code=500, detail=f"Node {node_id} returned an error: {response.text}")
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=500, detail=f"Could not reach Node {node_id}: {str(e)}")
+    try:
+        response = await http_client.post(f"{node_url}/corrupt/{chunk_id}", timeout=2.0)
+        if response.status_code == 200:
+            return {"message": f"Successfully instructed node {node_id} ({node_url}) to corrupt chunk for '{filename}'"}
+        else:
+            raise HTTPException(status_code=500, detail=f"Node {node_url} returned an error: {response.text}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Could not reach node {node_url}: {str(e)}")

@@ -33,7 +33,7 @@
         p.subtitle { color: var(--text-muted); margin-top: 0; margin-bottom: 2rem; }
 
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             width: 100%;
             display: grid;
             grid-template-columns: 1fr;
@@ -42,6 +42,10 @@
 
         @media (min-width: 768px) {
             .container { grid-template-columns: 1fr 2fr; }
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
         }
 
         .card {
@@ -54,7 +58,7 @@
 
         .card-header { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
 
-        input[type="text"], input[type="file"] {
+        input[type="text"], input[type="file"], input[type="number"] {
             width: 100%;
             padding: 0.75rem;
             margin-bottom: 1rem;
@@ -100,6 +104,31 @@
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); color: white; justify-content: center; align-items: center; z-index: 1000;
         }
+
+        /* Topology Grid */
+        .topology-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        }
+
+        .node-card {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            background: #fff;
+        }
+
+        .node-status {
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+
+        .status-active { color: var(--success); }
+        .status-inactive { color: var(--danger); }
     </style>
 </head>
 <body>
@@ -110,6 +139,17 @@
     <p class="subtitle">Erasure-Coded Object Store with Integrity Guarantees</p>
 
     <div class="container">
+        <!-- Explainer Banner -->
+        <div class="card full-width" style="background: #EEF2FF; border-color: var(--primary); padding: 1rem 1.5rem;">
+            <h3 style="margin-top: 0; color: var(--primary-dark); font-size: 1.1rem;">How the Math Works</h3>
+            <p style="font-size: 0.9rem; margin-bottom: 0;">
+                Files are never stored whole. They are split into chunks using <strong>Galois Field matrix multiplication</strong>. 
+                <br><strong>k</strong> = The exact number of chunks needed to rebuild the file. 
+                <br><strong>n</strong> = The total number of chunks distributed across the cluster.
+                <br><em>Example:</em> If you upload with <strong>k=2, n=5</strong>, your file is split into 5 pieces. You can suffer <strong>3 simultaneous server crashes</strong> (5 - 2) and still flawlessly recover your data.
+            </p>
+        </div>
+
         <!-- Upload Section -->
         <div class="card">
             <div class="card-header">Upload File</div>
@@ -117,9 +157,15 @@
                 <label style="font-size: 0.875rem; color: var(--text-muted);">Select Local File:</label>
                 <input type="file" id="fileInput" required>
                 
-                <label style="font-size: 0.875rem; color: var(--text-muted);">Virtual Path (e.g. /docs/report.pdf):</label>
-                <input type="text" id="virtualPath" placeholder="/my/secure/file.txt" required>
+                <label style="font-size: 0.875rem; color: var(--text-muted);">Virtual Path (auto-filled, editable):</label>
+                <input type="text" id="virtualPath" placeholder="my_file.txt" required>
                 
+                <label style="font-size: 0.875rem; color: var(--text-muted);">Data Fragments (k) <span style="font-size: 0.75rem; color: var(--primary); cursor: help;" title="Minimum number of nodes required to piece the file back together. Higher k = better space efficiency, but lower fault tolerance.">(?)</span>:</label>
+                <input type="number" id="kInput" value="2" min="1" max="10" required>
+                
+                <label style="font-size: 0.875rem; color: var(--text-muted);">Total Fragments (n) <span style="font-size: 0.75rem; color: var(--primary); cursor: help;" title="Total number of nodes the file will be split across. n minus k is how many nodes can crash without losing data.">(?)</span>:</label>
+                <input type="number" id="nInput" value="3" min="2" max="15" required>
+
                 <button type="submit">Upload & Encode</button>
             </form>
         </div>
@@ -127,13 +173,15 @@
         <!-- File List Section -->
         <div class="card">
             <div class="card-header">Vault Contents</div>
-            <button onclick="fetchFiles()" style="margin-bottom: 1rem; background-color: var(--text-muted);">Refresh List</button>
+            <button onclick="fetchFiles()" style="margin-bottom: 1rem; background-color: var(--text-muted); width: auto;">Refresh List</button>
             
             <table>
                 <thead>
                     <tr>
                         <th>Filename</th>
                         <th>Size</th>
+                        <th>k</th>
+                        <th>n</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -141,6 +189,19 @@
                     <!-- Data populated by JS -->
                 </tbody>
             </table>
+        </div>
+
+        <!-- Cluster Topology Section -->
+        <div class="card full-width">
+            <div class="card-header">
+                Cluster Topology
+                <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted); display: block; margin-top: 0.25rem;">
+                    Simulate catastrophic server crashes by toggling power off. As long as at least <strong>k</strong> nodes survive, the Read-Repair engine will instantly reconstruct the file on download and magically revive the missing chunks onto healthy nodes in the background!
+                </span>
+            </div>
+            <div id="topologyContainer" class="topology-grid">
+                <!-- Data populated by JS -->
+            </div>
         </div>
     </div>
 
@@ -160,7 +221,7 @@
                 tbody.innerHTML = '';
 
                 if(files.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: gray;">No files in the vault.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: gray;">No files in the vault.</td></tr>';
                     return;
                 }
 
@@ -171,9 +232,10 @@
                     tr.innerHTML = `
                         <td style="font-family: monospace; font-size: 0.9rem;">${file.filename}</td>
                         <td>${sizeKB} KB</td>
+                        <td>${file.k !== undefined ? file.k : '-'}</td>
+                        <td>${file.n !== undefined ? file.n : '-'}</td>
                         <td class="action-buttons">
                             <button onclick="downloadFile('${file.filename}')">Download</button>
-                            <button class="btn-danger" onclick="attackNode(3, '${file.filename}')">Hack Node 3</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -189,15 +251,20 @@
             e.preventDefault();
             const fileInput = document.getElementById('fileInput');
             const virtualPath = document.getElementById('virtualPath').value;
+            const kVal = document.getElementById('kInput').value;
+            const nVal = document.getElementById('nInput').value;
 
             if (fileInput.files.length === 0) return;
 
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
+            formData.append('custom_filename', virtualPath);
+            formData.append('k', kVal);
+            formData.append('n', nVal);
 
             showLoader();
             try {
-                const response = await fetch(`${API_BASE}/upload/?custom_filename=${encodeURIComponent(virtualPath)}`, {
+                const response = await fetch(`${API_BASE}/upload/`, {
                     method: 'POST',
                     body: formData
                 });
@@ -206,6 +273,8 @@
                     alert('File successfully encoded and distributed!');
                     fileInput.value = '';
                     document.getElementById('virtualPath').value = '';
+                    document.getElementById('kInput').value = '2';
+                    document.getElementById('nInput').value = '3';
                     fetchFiles();
                 } else {
                     const error = await response.json();
@@ -218,17 +287,41 @@
             }
         });
 
+        // Auto-fill virtual path
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const virtualPathInput = document.getElementById('virtualPath');
+            if (this.files.length > 0 && !virtualPathInput.value) {
+                virtualPathInput.value = this.files[0].name;
+            }
+        });
+
         // Download a file
-        function downloadFile(filename) {
-            // Because our backend returns a StreamingResponse with headers, we can just use window.open
-            // or create a temporary anchor tag.
-            const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename.split('/').pop(); // Extract filename from path
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+        async function downloadFile(filename) {
+            showLoader();
+            try {
+                const url = `${API_BASE}/download/${filename}`;
+                const response = await fetch(url);
+                
+                if (response.ok) {
+                    // Convert stream to Blob and trigger standard browser download
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = filename.split('/').pop();
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(downloadUrl);
+                } else {
+                    const errorData = await response.json();
+                    alert(`Download failed: ${errorData.detail || 'Unknown Error'}\n\nDid you turn off too many nodes?`);
+                }
+            } catch(e) {
+                alert(`Network error during download: ${e.message}`);
+            } finally {
+                hideLoader();
+            }
         }
 
         // Simulate an attack
@@ -253,8 +346,56 @@
             }
         }
 
-        // Initial fetch
+        // Fetch and display topology
+        async function fetchTopology() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/topology`);
+                const topology = await res.json();
+                
+                const container = document.getElementById('topologyContainer');
+                container.innerHTML = '';
+                
+                for (const [nodeUrl, isActive] of Object.entries(topology)) {
+                    const div = document.createElement('div');
+                    div.className = 'node-card';
+                    
+                    const statusClass = isActive ? 'status-active' : 'status-inactive';
+                    const statusText = isActive ? 'active' : 'inactive';
+                    
+                    div.innerHTML = `
+                        <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all;">${nodeUrl}</div>
+                        <div class="node-status ${statusClass}">${statusText}</div>
+                        <button onclick="toggleNodePower('${nodeUrl}')" style="margin-top: auto; padding: 0.5rem; font-size: 0.8rem; background-color: var(--text-muted);">Toggle Power</button>
+                    `;
+                    container.appendChild(div);
+                }
+            } catch (e) {
+                console.error("Failed to fetch topology", e);
+            }
+        }
+
+        async function toggleNodePower(nodeUrl) {
+            try {
+                showLoader();
+                await fetch(`${API_BASE}/admin/topology/toggle`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ node_url: nodeUrl })
+                });
+                await fetchTopology();
+            } catch (e) {
+                alert("Failed to toggle node power.");
+            } finally {
+                hideLoader();
+            }
+        }
+
+        // Initial fetches
         fetchFiles();
+        fetchTopology();
+        
+        // Poll topology
+        setInterval(fetchTopology, 5000);
     </script>
 </body>
 </html>

@@ -28,7 +28,11 @@ class TestDistributedObjectStore(unittest.TestCase):
         """Test 1: Normal upload and download works."""
         print("\n[Test] Upload and download (Healthy)...")
         with open(self.file_name, "rb") as f:
-            resp = requests.post(f"{COORDINATOR_URL}/upload/", files={"file": (self.file_name, f)})
+            resp = requests.post(
+                f"{COORDINATOR_URL}/upload/", 
+                files={"file": (self.file_name, f)},
+                data={"k": 2, "n": 3}
+            )
         self.assertEqual(resp.status_code, 200)
 
         resp = requests.get(f"{COORDINATOR_URL}/download/{self.file_name}")
@@ -41,14 +45,26 @@ class TestDistributedObjectStore(unittest.TestCase):
         print("\n[Test] Single node corruption resilience...")
         # 1. Upload
         with open(self.file_name, "rb") as f:
-            requests.post(f"{COORDINATOR_URL}/upload/", files={"file": (self.file_name, f)})
+            requests.post(
+                f"{COORDINATOR_URL}/upload/", 
+                files={"file": (self.file_name, f)},
+                data={"k": 2, "n": 3}
+            )
         
-        # 2. Corrupt Node 3
-        # We find the chunk ID by peeking at the local volume for the demo's sake
-        chunk_id = self._get_chunk_id_from_node(3)
-        resp = requests.post(f"{NODE3_URL}/corrupt/{chunk_id}")
-        self.assertEqual(resp.status_code, 200)
-        print(f"  => Corrupted {chunk_id} on Node 3.")
+        # 2. Corrupt one node that actually holds a chunk for this file
+        topology = requests.get(f"{COORDINATOR_URL}/admin/topology").json()
+        num_nodes = len(topology)
+        
+        corrupted = 0
+        for node_id in range(1, num_nodes + 1):
+            resp = requests.post(f"{COORDINATOR_URL}/admin/corrupt/{node_id}/{self.file_name}")
+            if resp.status_code == 200:
+                print(f"  => Corrupted chunk on Node {node_id}.")
+                corrupted += 1
+                if corrupted == 1:
+                    break
+                    
+        self.assertEqual(corrupted, 1, "Failed to corrupt any node (could not find a matching chunk)")
 
         # 3. Download (System should catch it and use Node 1 & 2 to rebuild)
         resp = requests.get(f"{COORDINATOR_URL}/download/{self.file_name}")
@@ -61,38 +77,32 @@ class TestDistributedObjectStore(unittest.TestCase):
         print("\n[Test] Double node corruption detection...")
         # 1. Upload
         with open(self.file_name, "rb") as f:
-            requests.post(f"{COORDINATOR_URL}/upload/", files={"file": (self.file_name, f)})
+            requests.post(
+                f"{COORDINATOR_URL}/upload/", 
+                files={"file": (self.file_name, f)},
+                data={"k": 2, "n": 3}
+            )
         
-        # 2. Corrupt Node 2 AND Node 3
-        chunk_id_2 = self._get_chunk_id_from_node(2)
-        chunk_id_3 = self._get_chunk_id_from_node(3)
-        requests.post(f"{NODE2_URL}/corrupt/{chunk_id_2}")
-        requests.post(f"{NODE3_URL}/corrupt/{chunk_id_3}")
-        print(f"  => Corrupted Node 2 and Node 3.")
+        # 2. Corrupt two nodes that hold chunks for this file
+        topology = requests.get(f"{COORDINATOR_URL}/admin/topology").json()
+        num_nodes = len(topology)
+        
+        corrupted = 0
+        for node_id in range(1, num_nodes + 1):
+            resp = requests.post(f"{COORDINATOR_URL}/admin/corrupt/{node_id}/{self.file_name}")
+            if resp.status_code == 200:
+                print(f"  => Corrupted chunk on Node {node_id}.")
+                corrupted += 1
+                if corrupted == 2:
+                    break
+                    
+        self.assertEqual(corrupted, 2, "Failed to corrupt two nodes (could not find chunks)")
 
         # 3. Download (Should fail with 500 Error)
         resp = requests.get(f"{COORDINATOR_URL}/download/{self.file_name}")
         self.assertEqual(resp.status_code, 500)
         self.assertIn("Not enough valid fragments", resp.json()['detail'])
         print("  => OK: System correctly identified that data is unrecoverable.")
-
-    def _get_chunk_id_from_node(self, node_num):
-        # In this local demo, the node data is shared via docker volumes.
-        # We just look for the newest file in the node's data directory.
-        data_dir = f"./node/data" 
-        # Note: Since all nodes share the same code folder, we just look at the data folder.
-        # In a real setup each node has its own volume.
-        files = os.listdir(data_dir)
-        # Sort by modification time to get the latest chunk we just uploaded
-        files.sort(key=lambda x: os.path.getmtime(os.path.join(data_dir, x)), reverse=True)
-        # Find a chunk that matches our latest upload index (e.g., chunk index 0, 1, or 2)
-        # Our coordinator saves as {file_id}_{version_id}_{index}
-        # For Node X, we look for suffix _(X-1)
-        suffix = f"_{node_num-1}"
-        for f in files:
-            if f.endswith(suffix):
-                return f
-        return None
 
 if __name__ == "__main__":
     unittest.main()

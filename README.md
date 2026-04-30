@@ -1,5 +1,7 @@
 # Distributed Object Store with Integrity
 
+[![Integration Tests](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/tests.yml/badge.svg)](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/tests.yml)
+
 A fault-tolerant distributed storage system that splits files across multiple nodes using custom Reed-Solomon erasure coding (k=2, n=3) and verifies fragment integrity with SHA-256 hashes to detect corruption and prevent "mix-and-match" attacks during reconstruction.
 
 You can lose 1 out of 3 storage nodes and the file still comes back. You can corrupt a fragment on a surviving node and the system catches it before it ever touches the decoder.
@@ -113,24 +115,33 @@ Every fragment is cryptographically bound to a specific file version. A corrupte
 
 ## Quick Start
 
+We use a `Makefile` to simplify operations:
+
 ```bash
-# start the cluster (1 coordinator + 3 storage nodes)
-docker-compose up --build
+# Optional: Choose how many nodes to deploy (generates docker-compose.yml)
+make cluster nodes=7
 
-# in another terminal, upload a file
+# start the cluster (1 coordinator + N storage nodes)
+make build
+
+# run the integration tests
+make test
+
+# run the interactive demo steps
+make demo-upload
+make demo-corrupt
+make demo-download
+
+# shut down and clean up database/storage
+make clean
+```
+
+Or use the CLI manually:
+```bash
 python client.py upload ./myfile.txt /docs/myfile.txt
-
-# list stored files
 python client.py list
-
-# download it back
 python client.py download /docs/myfile.txt ./downloaded.txt
-
-# simulate node corruption (corrupts fragment on node 3)
 python client.py corrupt 3 /docs/myfile.txt
-
-# download again -- system detects corruption and reconstructs from remaining nodes
-python client.py download /docs/myfile.txt ./downloaded_v2.txt
 ```
 
 Or open `http://localhost:8000/ui/` for the web dashboard.

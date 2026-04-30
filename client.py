@@ -11,11 +11,11 @@ def upload(args):
         print(f"[-] Error: Local file '{args.local_path}' not found.")
         sys.exit(1)
         
-    print(f"[*] Uploading '{args.local_path}' to '{args.remote_path}'...")
+    print(f"[*] Uploading '{args.local_path}' to '{args.remote_path}' (k={args.k}, n={args.n})...")
     with open(args.local_path, "rb") as f:
         resp = requests.post(f"{COORDINATOR_URL}/upload/", 
                              files={"file": f}, 
-                             params={"custom_filename": args.remote_path})
+                             data={"k": args.k, "n": args.n, "custom_filename": args.remote_path})
     
     if resp.status_code == 200:
         print("[+] Upload successful!")
@@ -81,6 +81,8 @@ def main():
     parser_upload = subparsers.add_parser("upload", help="Upload a file to the distributed store")
     parser_upload.add_argument("local_path", type=str, help="Path to the local file on your computer")
     parser_upload.add_argument("remote_path", type=str, help="The virtual path/name to save it as (e.g., /docs/secret.txt)")
+    parser_upload.add_argument("-k", type=int, default=2, help="Number of data fragments (default: 2)")
+    parser_upload.add_argument("-n", type=int, default=3, help="Total number of fragments (default: 3)")
     parser_upload.set_defaults(func=upload)
 
     # --- DOWNLOAD COMMAND ---

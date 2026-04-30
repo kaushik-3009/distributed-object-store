@@ -8,3 +8,13 @@ Project_Specifications.md
 docs/
 docs/logs/
 docs/notes/
+
+__pycache__/
+*.pyc
+*.pyo
+
+*.db
+*.db-journal
+
+node/data/
+
