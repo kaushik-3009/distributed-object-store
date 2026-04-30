@@ -95,6 +95,30 @@
             box-sizing: border-box;
             transition: border-color 100ms ease-in-out;
         }
+        
+        input[type="file"] {
+            padding: 0;
+            cursor: pointer;
+        }
+
+        input[type="file"]::file-selector-button {
+            background-color: var(--black);
+            color: var(--white);
+            font-size: 12px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            padding: 0 16px;
+            border: none;
+            border-right: 1px solid var(--black);
+            height: 100%;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-right: 12px;
+            transition: background-color 100ms;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: var(--near-black);
+        }
         input[type="text"]:focus, input[type="number"]:focus {
             border-color: var(--near-black);
             box-shadow: inset 0px 0px 0px 2px rgba(0, 0, 0, 0.1);
@@ -201,31 +225,38 @@
             </div>
 
             <div class="dashboard-grid">
-                <!-- Explainer Banner -->
-                <div id="how-it-works" class="objective-box full-width">
-                    <h2 style="border-bottom: none; margin-bottom: 8px;">SYSTEM MATH // GALOIS FIELD MULTIPLICATION</h2>
-                    <p style="margin-top: 0; margin-bottom: 0;">
+            <!-- Explainer Banner -->
+            <details id="how-it-works" class="objective-box full-width" open style="cursor: pointer;">
+                <summary style="font-size: 14.4px; font-weight: 700; margin-bottom: 8px; outline: none; border-bottom: 1px solid var(--black); padding-bottom: 8px; text-transform: uppercase;">
+                    SYSTEM MATH // GALOIS FIELD MULTIPLICATION
+                </summary>
+                <div style="margin-top: 12px; cursor: default;">
+                    <p style="margin-top: 0; margin-bottom: 12px;">
                         Files are not stored whole. They are split into fragments using <strong>Galois Field matrix operations</strong>.
                         <br><br>
                         <strong>k</strong> = The exact number of chunks needed to rebuild the file.<br>
                         <strong>n</strong> = The total number of chunks distributed across the cluster.<br>
                         <em>Example:</em> If you upload with <strong>k=2, n=5</strong>, your file is split into 5 pieces. You can suffer <strong>3 simultaneous server crashes</strong> (5 - 2) and still flawlessly recover your data.
                     </p>
+                    <p style="margin-top: 0; margin-bottom: 0; font-size: 12px; color: var(--gray-med);">
+                        <strong>RECALCULATION ENGINE:</strong> During encode, the file byte vectors are multiplied by a systematic Vandermonde matrix. If fragments are lost, the coordinator extracts the surviving rows of the matrix, performs Gaussian elimination to invert it over GF(2^8), and multiplies the inverted matrix against the surviving chunks to perfectly restore the missing bytes (e.g. D₀ = P₀ ⊕ D₁).
+                    </p>
                 </div>
+            </details>
 
-                <!-- Upload Section -->
-                <div id="upload" class="data-card">
-                    <h2>IO.UPLOAD_NODE</h2>
-                    <form id="uploadForm">
-                        <div class="form-group">
-                            <label>SELECT_LOCAL_FILE:</label>
-                            <input type="file" id="fileInput" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>VIRTUAL_PATH: <span class="caption">Auto-filled, but entirely editable.</span></label>
-                            <input type="text" id="virtualPath" placeholder="my_file.txt" required>
-                        </div>
+            <!-- Upload Section -->
+            <div id="upload" class="data-card">
+                <h2>IO.UPLOAD_NODE</h2>
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label>SELECT_LOCAL_FILE: <span class="caption">Max limit: 20MB</span></label>
+                        <input type="file" id="fileInput" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>VIRTUAL_PATH:</label>
+                        <input type="text" id="virtualPath" placeholder="my_file.txt" required>
+                    </div>
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                             <div class="form-group">
@@ -311,6 +342,7 @@
                         <td>${file.n !== undefined ? file.n : '-'}</td>
                         <td class="action-buttons">
                             <button class="btn-secondary" onclick="downloadFile('${file.filename}')">DOWNLOAD</button>
+                            <button class="btn-secondary" style="color: var(--danger-dark); border-color: var(--danger-dark);" onclick="deleteFile('${file.filename}')">DELETE</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -390,6 +422,29 @@
                 } else {
                     const errorData = await response.json();
                     alert(`DOWNLOAD_FAILED: ${errorData.detail || 'Unknown Error'}\n\nDid you turn off too many nodes?`);
+                }
+            } catch(e) {
+                alert(`NETWORK_ERROR: ${e.message}`);
+            } finally {
+                hideLoader();
+            }
+        }
+
+        // Delete a file
+        async function deleteFile(filename) {
+            if(!confirm(`WARNING: Are you sure you want to permanently delete ${filename}?`)) return;
+            
+            showLoader();
+            try {
+                const url = `${API_BASE}/delete/${encodeURIComponent(filename)}`;
+                const response = await fetch(url, { method: 'DELETE' });
+                
+                if (response.ok) {
+                    alert('DELETE_SUCCESS: File removed from index and fragments dropped.');
+                    fetchFiles();
+                } else {
+                    const errorData = await response.json();
+                    alert(`DELETE_FAILED: ${errorData.detail || 'Unknown Error'}`);
                 }
             } catch(e) {
                 alert(`NETWORK_ERROR: ${e.message}`);

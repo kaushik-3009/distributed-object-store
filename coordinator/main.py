@@ -76,6 +76,10 @@ async def upload_file(
     file_bytes = await file.read()
     original_size = len(file_bytes)
     
+    # Restrict file size to 20MB to prevent memory exhaustion
+    if original_size > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File exceeds 20MB maximum size limit.")
+        
     rs = ReedSolomon()
     fragments, padding_len = rs.encode(file_bytes, k, n)
     file_id = str(uuid.uuid4())
@@ -243,6 +247,38 @@ async def toggle_topology(req: TopologyToggleRequest):
 @app.get("/admin/topology")
 async def get_topology():
     return CLUSTER_TOPOLOGY
+
+@app.delete("/delete/{filename:path}")
+async def delete_file(filename: str):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('SELECT file_id, version_id, manifest FROM files WHERE filename = ?', (filename,))
+    row = cursor.fetchone()
+    
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    file_id, version_id, manifest_str = row
+    manifest = json.loads(manifest_str)
+    
+    # Send delete requests to nodes
+    for idx_str, meta in manifest.items():
+        node_url = meta["node"]
+        chunk_id = f"{file_id}_{version_id}_{idx_str}"
+        try:
+            # We fire and forget these deletes. If a node is down, the chunk is orphaned, 
+            # but in a real system we'd use a background sweeper.
+            await http_client.delete(f"{node_url}/delete/{chunk_id}", timeout=2.0)
+        except Exception as e:
+            print(f"Failed to delete chunk {chunk_id} from {node_url}: {e}")
+
+    # Remove from manifest
+    cursor.execute('DELETE FROM files WHERE filename = ?', (filename,))
+    conn.commit()
+    conn.close()
+    
+    return {"message": f"Successfully deleted {filename}"}
 
 @app.post("/admin/corrupt/{node_id}/{filename:path}")
 async def corrupt_file(node_id: int, filename: str):
